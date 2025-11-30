@@ -6,6 +6,7 @@ import random
 import pickle as pkl
 import itertools
 import numpy as np
+import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, average_precision_score
 import matplotlib.pyplot as plt
 from functools import partial

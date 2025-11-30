@@ -15,14 +15,28 @@ from src.nonlinear import NonLinearModel
 from scipy.optimize import linear_sum_assignment
 
 MODEL2BATCH_SIZE = {
-    "tnf": 100, "tnf_k": 100, "hyenadna": 100, "dnabert2": 20, "nt": 64, "dnaberts": 20,
-    "kmerprofile": -1, "poisson": -1, "nonlinear": -1,
+    "tnf": 100,
+    "tnf_k": 100,
+    "hyenadna": 100,
+    "dnabert2": 20,
+    "nt": 64,
+    "dnaberts": 20,
+    "kmerprofile": -1,
+    "poisson": -1,
+    "nonlinear": -1,
 }
 
 
 def get_embedding(
-        dna_sequences, model_name, species, sample, k=4,
-        metric=None, task_name="clustering", test_model_dir=None, suffix=""
+    dna_sequences,
+    model_name,
+    species,
+    sample,
+    k=4,
+    metric=None,
+    task_name="clustering",
+    test_model_dir=None,
+    suffix="",
 ):
     #
     # model2batch_size = {
@@ -32,7 +46,9 @@ def get_embedding(
     batch_size = 10  # MODEL2BATCH_SIZE[model_name]
 
     # Define the embedding directory and path
-    embedding_file_dir = os.path.join("embeddings", species, f"{task_name}_{sample}{suffix}")
+    embedding_file_dir = os.path.join(
+        "embeddings", species, f"{task_name}_{sample}{suffix}"
+    )
     embedding_file_path = os.path.join(embedding_file_dir, f"{model_name}.npy")
 
     # Load the embedding file if it exits
@@ -44,73 +60,68 @@ def get_embedding(
         print(f"Calculate embedding for {model_name} {species} {sample}")
 
         if model_name == "tnf":
-
             embedding = calculate_tnf(dna_sequences)
-            embedding = normalize(embedding, norm='l2')
+            embedding = normalize(embedding, norm="l2")
 
         elif model_name == "tnf_k":
-
             embedding = calculate_tnf(dna_sequences, kernel=True)
-            embedding = normalize(embedding, norm='l2')
+            embedding = normalize(embedding, norm="l2")
 
         elif model_name == "hyenadna":
-
             embedding = calculate_llm_embedding(
                 dna_sequences,
                 model_name_or_path="LongSafari/hyenadna-medium-450k-seqlen-hf",
                 model_max_length=20000,
-                batch_size=batch_size
+                batch_size=batch_size,
             )
-            embedding = normalize(embedding, norm='l2')
+            embedding = normalize(embedding, norm="l2")
 
         elif model_name == "dnabert2":
-
             embedding = calculate_llm_embedding(
                 dna_sequences,
                 model_name_or_path="zhihan1996/DNABERT-2-117M",
                 model_max_length=5000,
-                batch_size=batch_size
+                batch_size=batch_size,
             )
-            embedding = normalize(embedding, norm='l2')
+            embedding = normalize(embedding, norm="l2")
 
         elif model_name == "nt":
-
             embedding = calculate_llm_embedding(
                 dna_sequences,
                 model_name_or_path="InstaDeepAI/nucleotide-transformer-v2-100m-multi-species",
                 model_max_length=2048,
-                batch_size=batch_size
+                batch_size=batch_size,
             )
-            embedding = normalize(embedding, norm='l2')
+            embedding = normalize(embedding, norm="l2")
 
         elif model_name == "dnaberts":
-
             embedding = calculate_llm_embedding(
                 dna_sequences,
                 model_name_or_path=test_model_dir,
                 model_max_length=5000,
-                batch_size=batch_size
+                batch_size=batch_size,
             )
-            embedding = normalize(embedding, norm='l2')
+            embedding = normalize(embedding, norm="l2")
 
         elif model_name == "kmerprofile":
-
-            norm = 'l1' if metric is None else metric
+            norm = "l1" if metric is None else metric
             embedding = calculate_tnf(dna_sequences, k=k)
             embedding = normalize(embedding, norm=norm)
 
         elif model_name == "poisson":
-
-            kwargs, model_state_dict = torch.load(test_model_dir, map_location=torch.device("cpu"))
-            kwargs['device'] = "cpu"
+            kwargs, model_state_dict = torch.load(
+                test_model_dir, map_location=torch.device("cpu")
+            )
+            kwargs["device"] = "cpu"
             pm = PoissonModel(**kwargs)
             pm.load_state_dict(model_state_dict)
             embedding = pm.read2emb(dna_sequences)
 
         elif model_name == "nonlinear":
-
-            kwargs, model_state_dict = torch.load(test_model_dir, map_location=torch.device("cpu"))
-            kwargs['device'] = "cpu"
+            kwargs, model_state_dict = torch.load(
+                test_model_dir, map_location=torch.device("cpu")
+            )
+            kwargs["device"] = "cpu"
             nlm = NonLinearModel(**kwargs)
             nlm.load_state_dict(model_state_dict)
             embedding = nlm.read2emb(dna_sequences)
@@ -120,7 +131,7 @@ def get_embedding(
 
         # Save the embedding file
         os.makedirs(embedding_file_dir, exist_ok=True)
-        with open(embedding_file_path, 'wb') as f:
+        with open(embedding_file_path, "wb") as f:
             np.save(f, embedding)
 
     return embedding
@@ -128,9 +139,11 @@ def get_embedding(
 
 def calculate_tnf(dna_sequences, kernel=False, k=4):
     # Define all possible tetra-nucleotides
-    nucleotides = ['A', 'T', 'C', 'G']
+    nucleotides = ["A", "T", "C", "G"]
 
-    multi_nucleotides = [''.join(kmer) for kmer in itertools.product(nucleotides, repeat=k)]
+    multi_nucleotides = [
+        "".join(kmer) for kmer in itertools.product(nucleotides, repeat=k)
+    ]
 
     # build mapping from multi-nucleotide to index
     tnf_index = {tn: i for i, tn in enumerate(multi_nucleotides)}
@@ -139,7 +152,7 @@ def calculate_tnf(dna_sequences, kernel=False, k=4):
     embedding = np.zeros((len(dna_sequences), len(multi_nucleotides)))
     for j, seq in enumerate(dna_sequences):
         for i in range(len(seq) - k + 1):
-            multi_nuc = seq[i:i + k]
+            multi_nuc = seq[i : i + k]
             embedding[j, tnf_index[multi_nuc]] += 1
 
     if kernel:
@@ -148,8 +161,9 @@ def calculate_tnf(dna_sequences, kernel=False, k=4):
     return embedding
 
 
-def calculate_llm_embedding(dna_sequences, model_name_or_path, model_max_length=400, batch_size=20):
-
+def calculate_llm_embedding(
+    dna_sequences, model_name_or_path, model_max_length=400, batch_size=20
+):
     # reorder the sequences by length
     lengths = [len(seq) for seq in dna_sequences]
     idx = np.argsort(lengths)
@@ -187,20 +201,23 @@ def calculate_llm_embedding(dna_sequences, model_name_or_path, model_max_length=
         n_cpu = 1
 
     train_loader = util_data.DataLoader(
-        dna_sequences, batch_size=batch_size * (n_gpu + n_cpu), shuffle=False, num_workers=2 * (n_gpu + n_cpu)
+        dna_sequences,
+        batch_size=batch_size * (n_gpu + n_cpu),
+        shuffle=False,
+        num_workers=2 * (n_gpu + n_cpu),
     )
     for j, batch in enumerate(tqdm.tqdm(train_loader)):
         with torch.no_grad():
             token_feat = tokenizer.batch_encode_plus(
                 batch,
                 max_length=model_max_length,
-                return_tensors='pt',
-                padding='longest',
-                truncation=True
+                return_tensors="pt",
+                padding="longest",
+                truncation=True,
             )
-            input_ids = token_feat['input_ids']
+            input_ids = token_feat["input_ids"]
             if not is_hyenadna:
-                attention_mask = token_feat['attention_mask']
+                attention_mask = token_feat["attention_mask"]
             if n_gpu:
                 input_ids = input_ids.cuda()
                 if not is_hyenadna:
@@ -208,17 +225,24 @@ def calculate_llm_embedding(dna_sequences, model_name_or_path, model_max_length=
 
             if is_hyenadna:
                 model_output = model.forward(input_ids=input_ids)[0].detach().cpu()
-                attention_mask = torch.ones(size=(model_output.shape[0], model_output.shape[1], 1), device='cpu')
+                attention_mask = torch.ones(
+                    size=(model_output.shape[0], model_output.shape[1], 1), device="cpu"
+                )
             else:
-                model_output = model.forward(input_ids=input_ids, attention_mask=attention_mask)[0].detach().cpu()
+                model_output = (
+                    model.forward(input_ids=input_ids, attention_mask=attention_mask)[0]
+                    .detach()
+                    .cpu()
+                )
                 attention_mask = attention_mask.unsqueeze(-1).detach().cpu()
 
-            embedding = torch.sum(model_output * attention_mask, dim=1) / torch.sum(attention_mask, dim=1)
+            embedding = torch.sum(model_output * attention_mask, dim=1) / torch.sum(
+                attention_mask, dim=1
+            )
 
             if j == 0:
                 embeddings = embedding
             else:
-
                 embeddings = torch.cat((embeddings, embedding), dim=0)
 
     embeddings = np.array(embeddings.detach().cpu())
@@ -229,22 +253,32 @@ def calculate_llm_embedding(dna_sequences, model_name_or_path, model_max_length=
     return embeddings
 
 
-def KMedoid(features, min_similarity=0.8, min_bin_size=100, max_iter=300, metric="dot", scalable=False):
+def KMedoid(
+    features,
+    min_similarity=0.8,
+    min_bin_size=100,
+    max_iter=300,
+    metric="dot",
+    scalable=False,
+):
     # rank nodes by the number of neighbors
     features = features.astype(np.float32)
     if metric == "dot":
-
         if scalable:
             similarities = np.zeros((features.shape[0], features.shape[0]))
             for i in range(0, features.shape[0], 512):
-                similarities[i:i + 512, :] = features[i:i + 512, :] @ features.T
+                similarities[i : i + 512, :] = features[i : i + 512, :] @ features.T
         else:
             similarities = np.dot(features, features.T)
 
     elif metric == "euclidean" or metric == "l2":
-        similarities = np.exp(-distance.squareform(distance.pdist(features, 'euclidean')))
+        similarities = np.exp(
+            -distance.squareform(distance.pdist(features, "euclidean"))
+        )
     elif metric == "l1":
-        similarities = np.exp(-distance.squareform(distance.pdist(features, 'minkowski', p=1.)))
+        similarities = np.exp(
+            -distance.squareform(distance.pdist(features, "minkowski", p=1.0))
+        )
     else:
         raise ValueError("Invalid metric!")
 
@@ -256,7 +290,6 @@ def KMedoid(features, min_similarity=0.8, min_bin_size=100, max_iter=300, metric
 
     iter_count = 1
     while np.any(p == -1):
-
         if iter_count == max_iter:
             break
 
@@ -272,11 +305,18 @@ def KMedoid(features, min_similarity=0.8, min_bin_size=100, max_iter=300, metric
                 similarity = np.dot(features, current_medoid)
             elif metric == "euclidean" or metric == "l2":
                 similarity = np.exp(
-                    -distance.cdist(features, np.expand_dims(current_medoid, axis=0), 'euclidean')
+                    -distance.cdist(
+                        features, np.expand_dims(current_medoid, axis=0), "euclidean"
+                    )
                 ).squeeze()
             elif metric == "l1":
                 similarity = np.exp(
-                    -distance.cdist(features, np.expand_dims(current_medoid, axis=0), 'minkowski', p=1.)
+                    -distance.cdist(
+                        features,
+                        np.expand_dims(current_medoid, axis=0),
+                        "minkowski",
+                        p=1.0,
+                    )
                 ).squeeze()
             else:
                 raise ValueError("Invalid metric!")
@@ -294,7 +334,9 @@ def KMedoid(features, min_similarity=0.8, min_bin_size=100, max_iter=300, metric
             p[selected_idx] = iter_count
             row_sum -= np.sum(similarities[:, selected_idx], axis=1)
             row_sum[selected_idx] = 0
-            print(f"Current label: {iter_count}, Number of assigned elements: {len(selected_idx)}")
+            print(
+                f"Current label: {iter_count}, Number of assigned elements: {len(selected_idx)}"
+            )
         else:
             raise ValueError("No selected index")
 
@@ -331,7 +373,10 @@ def align_labels_via_hungarian_algorithm(true_labels, predicted_labels):
     row_ind, col_ind = linear_sum_assignment(confusion_matrix, maximize=True)
 
     # Create a mapping from predicted labels to true labels
-    label_mapping = {predicted_label: true_label for true_label, predicted_label in zip(row_ind, col_ind)}
+    label_mapping = {
+        predicted_label: true_label
+        for true_label, predicted_label in zip(row_ind, col_ind)
+    }
 
     return label_mapping
 
@@ -353,11 +398,21 @@ def compute_class_center_medium_similarity(embeddings, labels, metric="dot"):
             similarities = np.dot(mean, embeddings[start:end].T).reshape(-1)
         elif metric == "euclidean" or metric == "l2":
             similarities = np.exp(
-                -distance.cdist(np.expand_dims(mean, axis=0), embeddings[start:end], 'minkowski', p=2.).reshape(-1)
+                -distance.cdist(
+                    np.expand_dims(mean, axis=0),
+                    embeddings[start:end],
+                    "minkowski",
+                    p=2.0,
+                ).reshape(-1)
             )
         elif metric == "l1":
             similarities = np.exp(
-                -distance.cdist(np.expand_dims(mean, axis=0), embeddings[start:end], 'minkowski', p=1.).reshape(-1)
+                -distance.cdist(
+                    np.expand_dims(mean, axis=0),
+                    embeddings[start:end],
+                    "minkowski",
+                    p=1.0,
+                ).reshape(-1)
             )
         else:
             raise ValueError("Invalid metric!")
