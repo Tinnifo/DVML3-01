@@ -13,12 +13,13 @@ Note: OUR.py and REVISIT.py have slightly different architectures:
 Models trained with one architecture should be loaded with the matching class.
 By default, we use REVISIT's NonLinearModel since it has all required methods.
 """
+
 from src.REVISIT import NonLinearModel as REVISIT_NonLinearModel
 from src.OUR import NonLinearModel as OUR_NonLinearModel
 
-# Use REVISIT's NonLinearModel as the default since it has all required methods
-# (including read2emb) and is compatible with the evaluation scripts
+# To use OUR model, change the line below to:
+# NonLinearModel = OUR_NonLinearModel
+
 NonLinearModel = REVISIT_NonLinearModel
 
 __all__ = ["NonLinearModel"]
-
