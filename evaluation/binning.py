@@ -15,6 +15,12 @@ from evaluation.utils import (
     compute_class_center_medium_similarity,
 )
 
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
 csv.field_size_limit(sys.maxsize)
 csv.field_size_limit(sys.maxsize)
 MAX_SEQ_LEN = 20000
@@ -169,6 +175,38 @@ def main(args):
                 print(f"f1_results: {f1_results}")
                 print(f"recall_results: {recall_results} \n")
 
+                # Log to W&B if enabled
+                if args.wandb_log and WANDB_AVAILABLE:
+                    try:
+                        # Initialize W&B if not already initialized
+                        if not wandb.run:
+                            wandb.init(
+                                project=args.wandb_project if args.wandb_project else "dna-embedding-eval",
+                                entity=args.wandb_entity,
+                                mode=args.wandb_mode,
+                                tags=["evaluation", "binning", model_name],
+                            )
+                        
+                        eval_metrics = {
+                            "eval/threshold": threshold,
+                            "eval/num_clusters": num_clusters,
+                            "eval/num_sequences": len(dna_sequences),
+                            "eval/num_predicted": len(predicted_labels),
+                            "eval/model": model_name,
+                            "eval/species": species,
+                            "eval/sample": sample,
+                        }
+                        
+                        thresholds_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+                        for i, thresh in enumerate(thresholds_list):
+                            eval_metrics[f"eval/recall_at_{thresh}"] = recall_results[i]
+                            eval_metrics[f"eval/f1_at_{thresh}"] = f1_results[i]
+                        
+                        wandb.log(eval_metrics)
+                        print(f"Evaluation metrics logged to W&B: {eval_metrics}")
+                    except Exception as e:
+                        print(f"Warning: Failed to log to W&B: {e}")
+
                 with open(args.output, "a+") as f:
                     f.write("\n")
                     f.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
@@ -229,5 +267,35 @@ if __name__ == "__main__":
         default="",
         help="Suffix to add to the output embedding file",
     )
+    parser.add_argument(
+        "--wandb_log",
+        action="store_true",
+        help="Enable W&B logging for evaluation metrics",
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default=None,
+        help="W&B project name for evaluation logging",
+    )
+    parser.add_argument(
+        "--wandb_entity",
+        type=str,
+        default=None,
+        help="W&B entity/team name",
+    )
+    parser.add_argument(
+        "--wandb_mode",
+        type=str,
+        default="online",
+        choices=["online", "offline", "disabled"],
+        help="W&B logging mode",
+    )
     args = parser.parse_args()
+    
+    if args.wandb_log and not WANDB_AVAILABLE:
+        print("Warning: wandb is not installed. W&B logging will be disabled.")
+        print("Install with: pip install wandb")
+        args.wandb_log = False
+    
     main(args)

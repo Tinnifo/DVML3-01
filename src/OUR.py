@@ -6,6 +6,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+import wandb
+import os
 
 
 def set_seed(seed: int):
@@ -307,6 +309,9 @@ def supcon_loss(
     embeddings: torch.Tensor, labels: torch.Tensor, temperature: float = 0.1
 ):
     """
+    Supervised Contrastive Loss with configurable temperature.
+    """
+    """
     embeddings: [N, d]  (all views in the batch)
     labels:     [N]     (fragment IDs; same ID = positives)
     """
@@ -332,7 +337,7 @@ def supcon_loss(
     return loss[valid].mean()
 
 
-def single_epoch(model, optimizer, training_loader):
+def single_epoch(model, optimizer, training_loader, temperature: float = 0.1):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     epoch_loss = 0.0
 
@@ -342,7 +347,7 @@ def single_epoch(model, optimizer, training_loader):
         frag_ids = frag_ids.to(device)
 
         embeddings = model.encoder(kmer_profiles)
-        batch_loss = supcon_loss(embeddings, frag_ids)
+        batch_loss = supcon_loss(embeddings, frag_ids, temperature=temperature)
         batch_loss.backward()
         optimizer.step()
 
@@ -361,7 +366,22 @@ def run(
     model_save_path: str = None,
     checkpoint: int = 0,
     verbose: bool = True,
+    temperature: float = 0.1,
+    wandb_config: dict = None,
 ):
+    # Initialize W&B if config is provided
+    if wandb_config is not None and wandb_config.get("enabled", False):
+        wandb.init(
+            project=wandb_config.get("project", "dna-embedding"),
+            entity=wandb_config.get("entity", None),
+            mode=wandb_config.get("mode", "online"),
+            config=wandb_config.get("config", {}),
+            tags=["our", "hour-model"],
+        )
+        # Log hyperparameters
+        if wandb_config.get("config"):
+            wandb.config.update(wandb_config["config"])
+
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
         print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -376,10 +396,16 @@ def run(
         if verbose:
             print(f"\t+ Epoch {epoch + 1}.")
 
-        avg_loss = single_epoch(model, optimizer, training_loader)
+        avg_loss = single_epoch(
+            model, optimizer, training_loader, temperature=temperature
+        )
 
         if verbose:
             print(f"Epoch {epoch + 1}, Training Loss: {avg_loss}")
+
+        # Log to W&B
+        if wandb_config is not None and wandb_config.get("enabled", False):
+            wandb.log({"train_loss": avg_loss, "epoch": epoch + 1})
 
         if (
             model_save_path is not None
@@ -419,6 +445,210 @@ def run(
         if verbose:
             print("Model is saving.")
             print(f"\t- Target path: {model_save_path}")
+
+    # Run evaluation if enabled and model is saved
+    if (
+        wandb_config is not None
+        and wandb_config.get("enabled", False)
+        and model_save_path is not None
+    ):
+        eval_config = wandb_config.get("evaluation", {})
+        if eval_config.get("enabled", False):
+            try:
+                run_evaluation_and_log(
+                    model_path=model_save_path,
+                    eval_config=eval_config,
+                    wandb_config=wandb_config,
+                )
+            except Exception as e:
+                print(f"Warning: Evaluation failed: {e}")
+                if wandb_config.get("enabled", False):
+                    wandb.log({"evaluation_error": str(e)})
+
+    # Finish W&B run
+    if wandb_config is not None and wandb_config.get("enabled", False):
+        wandb.finish()
+
+
+def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dict):
+    """
+    Run evaluation using evaluation/binning.py logic and log metrics to W&B.
+    This is a simplified version that can be extended based on evaluation needs.
+    """
+    # Import evaluation utilities
+    try:
+        from evaluation.utils import get_embedding
+        from evaluation.binning import KMedoid, align_labels_via_hungarian_algorithm
+        import sklearn.metrics
+        import collections
+        import csv
+    except ImportError as e:
+        print(f"Warning: Could not import evaluation modules: {e}")
+        return
+
+    data_dir = eval_config.get("data_dir")
+    species = eval_config.get("species", "reference")
+    sample = eval_config.get("sample", 5)
+    k = eval_config.get("k", 4)
+    metric = eval_config.get("metric", "l2")
+
+    if data_dir is None:
+        print("Warning: Evaluation data_dir not provided, skipping evaluation")
+        return
+
+    try:
+        # Load clustering data to compute similarity threshold
+        clustering_data_file_path = os.path.join(data_dir, species, "clustering_0.tsv")
+        if not os.path.exists(clustering_data_file_path):
+            print(
+                f"Warning: Clustering data file not found: {clustering_data_file_path}"
+            )
+            return
+
+        with open(clustering_data_file_path, "r") as f:
+            reader = csv.reader(f, delimiter="\t")
+            data = list(reader)[1:]
+
+        MAX_SEQ_LEN = 20000
+        dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
+        labels = [d[1] for d in data]
+
+        # Convert labels to numeric values
+        label2id = {l: i for i, l in enumerate(set(labels))}
+        labels = np.array([label2id[l] for l in labels])
+        num_clusters = len(label2id)
+
+        # Get embeddings
+        embedding = get_embedding(
+            dna_sequences=dna_sequences,
+            model_name="our",
+            species=species,
+            sample=0,
+            k=k,
+            task_name="clustering",
+            test_model_dir=model_path,
+            suffix="",
+        )
+
+        # Compute threshold
+        from evaluation.utils import compute_class_center_medium_similarity
+
+        percentile_values = compute_class_center_medium_similarity(
+            embedding, labels, metric=metric
+        )
+        threshold = percentile_values[-3]
+
+        # Load binning data
+        data_file = os.path.join(data_dir, species, f"binning_{sample}.tsv")
+        if not os.path.exists(data_file):
+            print(f"Warning: Binning data file not found: {data_file}")
+            return
+
+        with open(data_file, "r") as f:
+            reader = csv.reader(f, delimiter="\t")
+            data = list(reader)[1:]
+
+        dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
+        labels_bin = [d[1] for d in data]
+
+        # Filter sequences
+        MIN_SEQ_LEN = 2500
+        MIN_ABUNDANCE_VALUE = 10
+        filterd_idx = [
+            i for i, seq in enumerate(dna_sequences) if len(seq) >= MIN_SEQ_LEN
+        ]
+        dna_sequences = [dna_sequences[i] for i in filterd_idx]
+        labels_bin = [labels_bin[i] for i in filterd_idx]
+
+        label_counts = collections.Counter(labels_bin)
+        filterd_idx = [
+            i
+            for i, l in enumerate(labels_bin)
+            if label_counts[l] >= MIN_ABUNDANCE_VALUE
+        ]
+        dna_sequences = [dna_sequences[i] for i in filterd_idx]
+        labels_bin = [labels_bin[i] for i in filterd_idx]
+
+        label2id = {l: i for i, l in enumerate(set(labels_bin))}
+        labels_bin = np.array([label2id[l] for l in labels_bin])
+        num_clusters_bin = len(label2id)
+
+        # Generate embeddings for binning set
+        embedding = get_embedding(
+            dna_sequences,
+            "our",
+            species,
+            sample,
+            k=k,
+            metric=metric,
+            task_name="binning",
+            test_model_dir=model_path,
+            suffix="",
+        )
+
+        # Run KMedoid algorithm
+        binning_results = KMedoid(
+            embedding,
+            min_similarity=threshold,
+            min_bin_size=10,
+            max_iter=1000,
+            metric=metric,
+            scalable=False,
+        )
+
+        # Get metrics
+        true_labels_bin = labels_bin[binning_results != -1]
+        predicted_labels = binning_results[binning_results != -1]
+
+        if len(predicted_labels) == 0:
+            print("Warning: No predicted labels after binning")
+            return
+
+        # Align labels
+        alignment_bin = align_labels_via_hungarian_algorithm(
+            true_labels_bin, predicted_labels
+        )
+        predicted_labels_bin = [alignment_bin[label] for label in predicted_labels]
+
+        # Calculate metrics
+        recall_bin = sklearn.metrics.recall_score(
+            true_labels_bin, predicted_labels_bin, average=None, zero_division=0
+        )
+        recall_bin.sort()
+
+        f1_bin = sklearn.metrics.f1_score(
+            true_labels_bin, predicted_labels_bin, average=None, zero_division=0
+        )
+        f1_bin.sort()
+
+        thresholds_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        recall_results = []
+        f1_results = []
+        for thresh in thresholds_list:
+            recall_results.append(len(np.where(recall_bin > thresh)[0]))
+            f1_results.append(len(np.where(f1_bin > thresh)[0]))
+
+        # Log to W&B
+        eval_metrics = {
+            "eval/threshold": threshold,
+            "eval/num_clusters": num_clusters_bin,
+            "eval/num_sequences": len(dna_sequences),
+            "eval/num_predicted": len(predicted_labels),
+        }
+
+        for i, thresh in enumerate(thresholds_list):
+            eval_metrics[f"eval/recall_at_{thresh}"] = recall_results[i]
+            eval_metrics[f"eval/f1_at_{thresh}"] = f1_results[i]
+
+        wandb.log(eval_metrics)
+        print(f"Evaluation metrics logged to W&B: {eval_metrics}")
+
+    except Exception as e:
+        print(f"Error during evaluation: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise
 
 
 if __name__ == "__main__":
@@ -465,6 +695,49 @@ if __name__ == "__main__":
         default=4,
         help="Maximum number of views generated per read",
     )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.1,
+        help="Temperature parameter for SupCon loss",
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default=None,
+        help="W&B project name (if None, W&B logging is disabled)",
+    )
+    parser.add_argument(
+        "--wandb_entity",
+        type=str,
+        default=None,
+        help="W&B entity/team name",
+    )
+    parser.add_argument(
+        "--wandb_mode",
+        type=str,
+        default="online",
+        choices=["online", "offline", "disabled"],
+        help="W&B logging mode",
+    )
+    parser.add_argument(
+        "--eval_data_dir",
+        type=str,
+        default=None,
+        help="Data directory for evaluation (if provided, evaluation will run after training)",
+    )
+    parser.add_argument(
+        "--eval_species",
+        type=str,
+        default="reference",
+        help="Species for evaluation",
+    )
+    parser.add_argument(
+        "--eval_sample",
+        type=int,
+        default=5,
+        help="Sample ID for evaluation",
+    )
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -501,6 +774,39 @@ if __name__ == "__main__":
         collate_fn=supcon_collate_fn,
     )
 
+    # Prepare W&B config
+    wandb_config = None
+    if args.wandb_project is not None and args.wandb_mode != "disabled":
+        wandb_config = {
+            "enabled": True,
+            "project": args.wandb_project,
+            "entity": args.wandb_entity,
+            "mode": args.wandb_mode,
+            "config": {
+                "k": args.k,
+                "dim": args.dim,
+                "lr": args.lr,
+                "epoch": args.epoch,
+                "batch_size": args.batch_size
+                if args.batch_size
+                else len(training_dataset),
+                "max_views_per_read": args.max_views_per_read,
+                "max_read_num": args.max_read_num,
+                "seed": args.seed,
+                "temperature": args.temperature,
+                "device": args.device,
+                "workers_num": args.workers_num,
+            },
+            "evaluation": {
+                "enabled": args.eval_data_dir is not None,
+                "data_dir": args.eval_data_dir,
+                "species": args.eval_species,
+                "sample": args.eval_sample,
+                "k": args.k,
+                "metric": "l2",
+            },
+        }
+
     run(
         model,
         args.lr,
@@ -509,18 +815,6 @@ if __name__ == "__main__":
         model_save_path=args.output,
         checkpoint=args.checkpoint,
         verbose=True,
+        temperature=args.temperature,
+        wandb_config=wandb_config,
     )
-
-
-"""
-Example usage (from shell):
-python src/OUR.py \
-  --input debug_train.csv \
-  --k 2 \
-  --dim 256 \
-  --epoch 2 \
-  --lr 0.001 \
-  --batch_size 20 \
-  --device cpu \
-  --output model_supcon.pt
-"""

@@ -1,0 +1,66 @@
+program: src/REVISIT.py
+method: grid  # Options: grid, random, bayes
+metric:
+  name: eval/f1_at_0.5
+  goal: maximize
+
+parameters:
+  input:
+    value: train_2m.csv  # Update with your actual training file path
+  
+  k:
+    values: [2, 3, 4, 5, 6]
+  
+  dim:
+    values: [128, 256, 512]
+  
+  lr:
+    distribution: log_uniform
+    min: 0.00001
+    max: 0.01
+  
+  epoch:
+    values: [100, 500, 1000]
+  
+  batch_size:
+    values: [32, 64, 128, 256, 0]  # 0 means full dataset
+  
+  neg_sample_per_pos:
+    values: [100, 500, 1000, 2000]
+  
+  loss_name:
+    values: ["bern", "poisson", "hinge"]
+  
+  max_read_num:
+    values: [1000, 5000, 10000, 0]  # 0 means all
+  
+  seed:
+    value: 26042024
+  
+  device:
+    value: cuda
+  
+  workers_num:
+    value: 1
+  
+  checkpoint:
+    value: 0
+  
+  output:
+    value: models/revisit_model_epoch={epoch}_LR={lr}.pt
+  
+  wandb_project:
+    value: dna-embedding-revisit
+  
+  wandb_mode:
+    value: online
+  
+  eval_data_dir:
+    value: null  # Set to your data directory path if you want evaluation
+  
+  eval_species:
+    value: reference
+  
+  eval_sample:
+    value: 5
+
