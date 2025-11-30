@@ -501,7 +501,7 @@ if __name__ == "__main__":
 """
 Example usage (from shell):
 python src/OUR.py \
-  --input your_pairs.csv \
+  --input debug_train.csv \
   --k 2 \
   --dim 256 \
   --epoch 2 \
