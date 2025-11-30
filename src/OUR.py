@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 
 def set_seed(seed: int):
@@ -346,7 +345,6 @@ def run(
     epoch_num: int,
     training_loader,
     model_save_path: str = None,
-    loss_file_path: str = None,
     checkpoint: int = 0,
     verbose: bool = True,
 ):
@@ -357,9 +355,6 @@ def run(
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    writer = None
-    if loss_file_path is not None:
-        writer = SummaryWriter(loss_file_path)
     if verbose:
         print("Training has just started.")
 
@@ -367,15 +362,10 @@ def run(
         if verbose:
             print(f"\t+ Epoch {epoch + 1}.")
 
-        model.train(True)
         avg_loss = single_epoch(model, optimizer, training_loader)
 
         if verbose:
             print(f"Epoch {epoch + 1}, Training Loss: {avg_loss}")
-
-        if writer is not None:
-            writer.add_scalar("Loss/train", avg_loss, epoch + 1)
-            writer.flush()
 
         if (
             model_save_path is not None
@@ -395,9 +385,6 @@ def run(
             if verbose:
                 print("Model is saving.")
                 print(f"\t- Target path: {temp_model_save_path}")
-
-    if writer is not None:
-        writer.close()
 
     if model_save_path is not None:
         if isinstance(model, torch.nn.DataParallel):
@@ -500,15 +487,12 @@ if __name__ == "__main__":
         collate_fn=supcon_collate_fn,
     )
 
-    loss_file_path = args.output + ".loss" if args.output is not None else None
-
     run(
         model,
         args.lr,
         args.epoch,
         training_loader,
         model_save_path=args.output,
-        loss_file_path=loss_file_path,
         checkpoint=args.checkpoint,
         verbose=True,
     )
@@ -516,13 +500,13 @@ if __name__ == "__main__":
 
 """
 Example usage (from shell):
-python supcon_multiview.py \
+python src/OUR.py \
   --input your_pairs.csv \
-  --k 4 \
+  --k 2 \
   --dim 256 \
-  --epoch 100 \
+  --epoch 2 \
   --lr 0.001 \
-  --batch_size 256 \
-  --device cuda \
+  --batch_size 20 \
+  --device cpu \
   --output model_supcon.pt
 """

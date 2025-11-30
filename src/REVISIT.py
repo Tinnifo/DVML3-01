@@ -11,7 +11,6 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 import matplotlib.pyplot as plt
 from functools import partial
 import argparse
-from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from torch.utils.data import Dataset, DataLoader
 import re
@@ -269,9 +268,9 @@ def run(
     model,
     learning_rate,
     epoch_num,
+    training_loader,
     loss_name="bern",
     model_save_path=None,
-    loss_file_path=None,
     checkpoint=0,
     verbose=True,
 ):
@@ -283,8 +282,6 @@ def run(
     # Define the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    if loss_file_path is not None:
-        writer = SummaryWriter(loss_file_path)
     if verbose:
         print("Training has just started.")
 
@@ -292,16 +289,10 @@ def run(
         if verbose:
             print(f"\t+ Epoch {epoch + 1}.")
 
-        # Make sure gradient tracking is on, and do a pass over the data
-        model.train(True)
         avg_loss = single_epoch(model, loss_func, optimizer, training_loader, loss_name)
 
         if verbose:
             print(f"Epoch {epoch + 1}, Training Loss: {avg_loss}")
-
-        if loss_file_path is not None:
-            writer.add_scalar("Loss/train", avg_loss, epoch + 1)
-            writer.flush()
 
         if (
             model_save_path is not None
@@ -323,8 +314,6 @@ def run(
             if verbose:
                 print(f"Model is saving.")
                 print(f"\t- Target path: {temp_model_save_path}")
-
-    writer.close()
 
     if model_save_path is not None:
         # If the model is a DataParallel object, then save the model.module
@@ -421,9 +410,25 @@ if __name__ == "__main__":
         model,
         args.lr,
         args.epoch,
+        training_loader,
         args.loss_name,
         args.output,
-        args.output + ".loss",
         args.checkpoint,
         verbose=True,
     )
+
+
+"""
+Example usage (from shell):
+python src/REVISIT.py \
+  --input your_pairs.csv \
+  --k 2 \
+  --dim 256 \
+  --epoch 10 \
+  --lr 0.001 \
+  --batch_size 20 \
+  --device cpu \
+  --loss_name bern \
+  --neg_sample_per_pos 100 \
+  --output model_revisit.pt
+"""
