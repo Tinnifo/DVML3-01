@@ -179,7 +179,7 @@ def main(args):
                 if args.wandb_log and WANDB_AVAILABLE:
                     try:
                         # Initialize W&B if not already initialized
-                        if not wandb.run:
+                        if wandb.run is None:
                             wandb.init(
                                 project=args.wandb_project if args.wandb_project else "dna-embedding-eval",
                                 entity=args.wandb_entity,

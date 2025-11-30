@@ -1,5 +1,5 @@
 program: src/REVISIT.py
-method: grid  # Options: grid, random, bayes
+method: random  # Options: grid, random, bayes (random recommended for large search spaces)
 metric:
   name: eval/f1_at_0.5
   goal: maximize
@@ -47,7 +47,7 @@ parameters:
     value: 0
   
   output:
-    value: models/revisit_model_epoch={epoch}_LR={lr}.pt
+    value: models/revisit_model.pt  # Will be saved with epoch and LR in filename by the script
   
   wandb_project:
     value: dna-embedding-revisit

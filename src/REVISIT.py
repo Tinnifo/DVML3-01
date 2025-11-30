@@ -348,6 +348,29 @@ def run(
             print(f"Model is saving.")
             print(f"\t- Target path: {model_save_path}")
 
+    # Run evaluation if enabled and model is saved
+    if (
+        wandb_config is not None
+        and wandb_config.get("enabled", False)
+        and model_save_path is not None
+    ):
+        eval_config = wandb_config.get("evaluation", {})
+        if eval_config.get("enabled", False):
+            try:
+                run_evaluation_and_log(
+                    model_path=model_save_path,
+                    eval_config=eval_config,
+                    wandb_config=wandb_config,
+                )
+            except Exception as e:
+                print(f"Warning: Evaluation failed: {e}")
+                if wandb_config.get("enabled", False):
+                    wandb.log({"evaluation_error": str(e)})
+
+    # Finish W&B run
+    if wandb_config is not None and wandb_config.get("enabled", False):
+        wandb.finish()
+
 
 def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dict):
     """
@@ -356,8 +379,11 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
     """
     # Import evaluation utilities
     try:
-        from evaluation.utils import get_embedding
-        from evaluation.binning import KMedoid, align_labels_via_hungarian_algorithm
+        from evaluation.utils import (
+            get_embedding,
+            KMedoid,
+            align_labels_via_hungarian_algorithm,
+        )
         import sklearn.metrics
         import collections
         import csv
@@ -528,29 +554,6 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
 
         traceback.print_exc()
         raise
-
-    # Run evaluation if enabled and model is saved
-    if (
-        wandb_config is not None
-        and wandb_config.get("enabled", False)
-        and model_save_path is not None
-    ):
-        eval_config = wandb_config.get("evaluation", {})
-        if eval_config.get("enabled", False):
-            try:
-                run_evaluation_and_log(
-                    model_path=model_save_path,
-                    eval_config=eval_config,
-                    wandb_config=wandb_config,
-                )
-            except Exception as e:
-                print(f"Warning: Evaluation failed: {e}")
-                if wandb_config.get("enabled", False):
-                    wandb.log({"evaluation_error": str(e)})
-
-    # Finish W&B run
-    if wandb_config is not None and wandb_config.get("enabled", False):
-        wandb.finish()
 
 
 if __name__ == "__main__":

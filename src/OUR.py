@@ -477,8 +477,11 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
     """
     # Import evaluation utilities
     try:
-        from evaluation.utils import get_embedding
-        from evaluation.binning import KMedoid, align_labels_via_hungarian_algorithm
+        from evaluation.utils import (
+            get_embedding,
+            KMedoid,
+            align_labels_via_hungarian_algorithm,
+        )
         import sklearn.metrics
         import collections
         import csv
