@@ -133,7 +133,8 @@ class SupConPairDataset(Dataset):
 
         # Optional subsampling
         if max_read_num > 0:
-            chosen_lines = random.sample(range(lines_num), max_read_num)
+            sample_size = min(max_read_num, lines_num)
+            chosen_lines = random.sample(range(lines_num), sample_size)
             chosen_lines.sort()
         else:
             chosen_lines = None
@@ -287,6 +288,19 @@ class NonLinearModel(torch.nn.Module):
             kmer_profile = kmer_profile / kmer_profile.sum()
 
         return kmer_profile
+
+    def read2emb(self, reads, normalized=True):
+        with torch.no_grad():
+            kmer_profiles = []
+            for read in reads:
+                kmer_profiles.append(
+                    self.read2kmer_profile(read, normalized=normalized)
+                )
+
+            kmer_profiles = torch.from_numpy(np.asarray(kmer_profiles)).to(torch.float)
+            embs = self.encoder(kmer_profiles).detach().numpy()
+
+        return embs
 
 
 def supcon_loss(

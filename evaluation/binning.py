@@ -28,15 +28,13 @@ def main(args):
         for species in args.species.split(","):
             for sample in map(int, args.samples.split(",")):
                 # Define the appropriate metric for the given method
-                if args.metric != None:
+                # OUR and REVISIT models use L2 (Euclidean) distance
+                if args.metric is not None:
                     metric = args.metric
                 else:
-                    if model_name == "kmerprofile":
-                        metric = "l1"
-                    elif model_name == "nonlinear":
-                        metric = "l2"
-                    else:
-                        metric = "dot"
+                    metric = (
+                        "l2"  # Default for nonlinear (REVISIT) and our (OUR) models
+                    )
 
                 print(
                     f"Model: {model_name} Species: {species} Sample ID: {sample} Metric: {metric}"
@@ -198,17 +196,20 @@ if __name__ == "__main__":
         "--test_model_dir",
         type=str,
         default="/root/trained_model",
-        help="Directory to save trained models to test",
+        help="Path to trained model file (.pt) for nonlinear/our models",
     )
     parser.add_argument(
         "--model_list",
         type=str,
-        default="dnaberts",
-        help="List of models to evaluate, separated by comma. Currently support [tnf, tnf-k, dnabert2, hyenadna, nt, dnarberts, kmerprofile, poisson, nonlinear]",
+        default="nonlinear,our",
+        help="List of models to evaluate, separated by comma. Supports [nonlinear (REVISIT), our (OUR/SupCon)]",
     )
     parser.add_argument("--data_dir", type=str, default=None, help="Data directory")
     parser.add_argument(
-        "--k", type=int, default=4, help="k Value for the kmerprofile method"
+        "--k",
+        type=int,
+        default=4,
+        help="k-mer size used in the model (should match training)",
     )
     parser.add_argument(
         "--metric",

@@ -46,7 +46,8 @@ class PairDataset(Dataset):
             lines_num = sum(1 for _ in f)
         # If the max_read_num is set, then sample the line number to read
         if max_read_num > 0:
-            chosen_lines = random.sample(range(lines_num), max_read_num)
+            sample_size = min(max_read_num, lines_num)
+            chosen_lines = random.sample(range(lines_num), sample_size)
             chosen_lines.sort()
 
         # Read the file
@@ -421,10 +422,10 @@ if __name__ == "__main__":
 """
 Example usage (from shell):
 python src/REVISIT.py \
-  --input your_pairs.csv \
+  --input debug_train.csv \
   --k 2 \
   --dim 256 \
-  --epoch 10 \
+  --epoch 2 \
   --lr 0.001 \
   --batch_size 20 \
   --device cpu \

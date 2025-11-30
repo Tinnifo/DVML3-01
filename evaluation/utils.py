@@ -12,6 +12,7 @@ import itertools
 from sklearn.preprocessing import normalize
 from src.poisson_model import PoissonModel
 from src.nonlinear import NonLinearModel
+from src.OUR import NonLinearModel as OUR_NonLinearModel
 from scipy.optimize import linear_sum_assignment
 
 MODEL2BATCH_SIZE = {
@@ -24,6 +25,7 @@ MODEL2BATCH_SIZE = {
     "kmerprofile": -1,
     "poisson": -1,
     "nonlinear": -1,
+    "our": -1,
 }
 
 
@@ -123,6 +125,15 @@ def get_embedding(
             )
             kwargs["device"] = "cpu"
             nlm = NonLinearModel(**kwargs)
+            nlm.load_state_dict(model_state_dict)
+            embedding = nlm.read2emb(dna_sequences)
+
+        elif model_name == "our":
+            kwargs, model_state_dict = torch.load(
+                test_model_dir, map_location=torch.device("cpu")
+            )
+            kwargs["device"] = "cpu"
+            nlm = OUR_NonLinearModel(**kwargs)
             nlm.load_state_dict(model_state_dict)
             embedding = nlm.read2emb(dna_sequences)
 
