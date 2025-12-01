@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import os
 from scipy.spatial import distance
-from src.nonlinear import NonLinearModel
+from src.REVISIT import NonLinearModel as REVISIT_NonLinearModel
 from src.OUR import NonLinearModel as OUR_NonLinearModel
 from scipy.optimize import linear_sum_assignment
 
@@ -35,15 +35,17 @@ def get_embedding(
         print(f"Calculate embedding for {model_name} {species} {sample}")
 
         if model_name == "nonlinear":
+            # REVISIT model: linear1 -> batch1 -> sigmoid -> dropout1 -> linear2
             kwargs, model_state_dict = torch.load(
                 test_model_dir, map_location=torch.device("cpu")
             )
             kwargs["device"] = "cpu"
-            nlm = NonLinearModel(**kwargs)
+            nlm = REVISIT_NonLinearModel(**kwargs)
             nlm.load_state_dict(model_state_dict)
             embedding = nlm.read2emb(dna_sequences)
 
         elif model_name == "our":
+            # OUR model: linear1 -> batch1 -> dropout1 -> linear2 (no activation)
             kwargs, model_state_dict = torch.load(
                 test_model_dir, map_location=torch.device("cpu")
             )

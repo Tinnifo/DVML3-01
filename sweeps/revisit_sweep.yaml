@@ -20,7 +20,7 @@ parameters:
     max: 0.01
   
   epoch:
-    values: [100, 500, 1000]
+    values: [10, 20, 30, 40, 50]
   
   batch_size:
     values: [32, 64, 128]  # 0 means full dataset

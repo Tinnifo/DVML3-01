@@ -5,8 +5,17 @@ import numpy as np
 import argparse
 from torch.utils.data import Dataset, DataLoader
 import re
+import warnings
 import wandb
 import os
+
+# Suppress urllib3 OpenSSL warning on macOS (harmless, just noise)
+warnings.filterwarnings("ignore", message=".*urllib3.*OpenSSL.*")
+try:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.NotOpenSSLWarning)
+except (ImportError, AttributeError):
+    pass
 
 
 def set_seed(seed):
@@ -315,7 +324,10 @@ def run(
             temp_model_save_path = re.sub(
                 "epoch.*_LR", f"epoch={epoch + 1}_LR", model_save_path
             )
-
+            # Create directory if it doesn't exist
+            dir_path = os.path.dirname(temp_model_save_path)
+            if dir_path:
+                os.makedirs(dir_path, exist_ok=True)
             torch.save(
                 [
                     {"k": model.get_k(), "device": model.get_device()},
@@ -332,6 +344,10 @@ def run(
         if isinstance(model, torch.nn.DataParallel):
             model = model.module
 
+        # Create directory if it doesn't exist
+        dir_path = os.path.dirname(model_save_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
         torch.save(
             [
                 {
@@ -377,6 +393,12 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
     Run evaluation using evaluation/binning.py logic and log metrics to W&B.
     Evaluates all available species and samples automatically.
     """
+    # Add project root to Python path for evaluation imports
+    import sys
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    
     # Import evaluation utilities
     try:
         from evaluation.utils import (
