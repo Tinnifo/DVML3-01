@@ -4,46 +4,7 @@ Two DNA sequence embedding models using k-mer representations:
 - **OUR**: Supervised Contrastive Learning with multi-view representations
 - **REVISIT**: Pairwise learning with negative sampling
 
-## Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Tinnifo/DVML3-01.git
-   cd DVML3-01
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Set up Weights & Biases** (optional, for experiment tracking):
-   ```bash
-   wandb login
-   ```
-
-4. **Install gdown** (if you don't already have it) for downloading the datasets:
-   ```bash
-   pip install gdown
-   ```
-
-## Datasets
-
-To download and prepare the training dataset, run the following commands:
-
-```bash
-gdown 1p59ch_MO-9DXh3LUIvorllPJGLEAwsUp
-unzip dnabert-s_train.zip
-```
-
-To download the evaluation datasets, use the following commands:
-
-```bash
-gdown 1I44T2alXrtXPZrhkuca6QP3tFHxDW98c
-unzip dnabert-s_eval.zip
-```
-
-## Docker Setup (Recommended)
+## Docker Setup
 
 Docker ensures the project works on all computers regardless of local Python/package setup.
 
@@ -52,17 +13,39 @@ Docker ensures the project works on all computers regardless of local Python/pac
 1. **Install Docker**: Download and install Docker from [docker.com](https://www.docker.com/get-started)
 2. **Install Docker Compose** (optional, for easier management)
 3. **For GPU support**: Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+4. **Install gdown** (if you don't already have it) for downloading the datasets:
+   ```bash
+   pip install gdown
+   ```
 
 ### Setup Steps
 
-1. **Download datasets** (see [Datasets](#datasets) section above) to your local machine
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Tinnifo/DVML3-01.git
+   cd DVML3-01
+   ```
 
-2. **Build the Docker image**:
+2. **Download datasets** to your local machine:
+
+   **Training dataset:**
+   ```bash
+   gdown 1p59ch_MO-9DXh3LUIvorllPJGLEAwsUp
+   unzip dnabert-s_train.zip
+   ```
+
+   **Evaluation datasets:**
+   ```bash
+   gdown 1I44T2alXrtXPZrhkuca6QP3tFHxDW98c
+   unzip dnabert-s_eval.zip
+   ```
+
+3. **Build the Docker image**:
    ```bash
    docker build -t dna-embedding .
    ```
 
-3. **Prepare your data directory structure**:
+4. **Prepare your data directory structure**:
    ```
    your-project/
    ├── data/
@@ -74,7 +57,13 @@ Docker ensures the project works on all computers regardless of local Python/pac
    └── DVML3-01/                 # This repository
    ```
 
-4. **Run sweeps with Docker**:
+5. **Update YAML configuration files** to use Docker paths:
+   - In `sweeps/our_sweep.yaml` and `sweeps/revisit_sweep.yaml`, set:
+     - `input: /app/data/train_2m.csv`
+     - `eval_data_dir: /app/data`
+     - `output: /app/models/our_model.pt` (or `revisit_model.pt`)
+
+6. **Run sweeps with Docker**:
 
    **For GPU (recommended):**
    ```bash
@@ -102,52 +91,14 @@ Docker ensures the project works on all computers regardless of local Python/pac
      dna-embedding python sweeps/run_our_sweep.py
    ```
 
-5. **Update YAML configuration files** to use Docker paths:
-   - In `sweeps/our_sweep.yaml` and `sweeps/revisit_sweep.yaml`, set:
-     - `input: /app/data/train_2m.csv`
-     - `eval_data_dir: /app/data`
-     - `output: /app/models/our_model.pt` (or `revisit_model.pt`)
-
 **Note:** 
 - Data files are mounted as volumes, so they remain on your host machine
 - Model outputs and W&B logs are saved to your host machine via volume mounts
 - The Docker container provides a consistent environment across all systems
 
-Docker ensures the project works on all computers regardless of local Python/package setup.
-
-1. **Build the Docker image**:
-   ```bash
-   docker build -t dna-embedding .
-   ```
-
-2. **Download your data** to your local machine (e.g., `./data/` directory)
-
-3. **Run sweeps with Docker** (mount your data directory):
-   ```bash
-   # For OUR model (with GPU)
-   docker run --gpus all -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models dna-embedding python sweeps/run_our_sweep.py
-
-   # For REVISIT model (with GPU)
-   docker run --gpus all -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models dna-embedding python sweeps/run_revisit_sweep.py
-
-   # For CPU-only (no GPU)
-   docker run -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models dna-embedding python sweeps/run_our_sweep.py
-   ```
-
-**Note:** Make sure your YAML configuration files point to the correct data paths (e.g., `/app/data/train_2m.csv` and `/app/data/` for evaluation data).
-
 ## Running Hyperparameter Sweeps
 
 Sweeps automatically run evaluation after each training run and log all metrics to W&B.
-
-**Run a sweep:**
-```bash
-# For OUR model
-python sweeps/run_our_sweep.py
-
-# For REVISIT model
-python sweeps/run_revisit_sweep.py
-```
 
 **What happens:**
 - Each run trains with different hyperparameters
@@ -173,9 +124,9 @@ DVML3-01/
 │   ├── run_our_sweep.py    # OUR sweep runner
 │   └── run_revisit_sweep.py # REVISIT sweep runner
 ├── evaluation/
-│   ├── utils.py            # Evaluation utilities (required)
-│   └── binning.py          # Standalone evaluation script (optional)
-├── requirements.txt
+│   └── utils.py            # Evaluation utilities (required)
+├── Dockerfile              # Docker configuration
+├── requirements.txt        # Python dependencies
 └── README.md
 ```
 
@@ -191,8 +142,8 @@ ATCGATCG...,GCTAGCTA...
 ## Troubleshooting
 
 1. **CUDA out of memory**: Reduce batch size or use `--device cpu` in YAML config
-2. **W&B authentication error**: Run `wandb login`
-3. **File not found**: Check data paths in YAML configuration files
+2. **W&B authentication error**: Run `wandb login` inside the Docker container or mount your W&B credentials
+3. **File not found**: Check data paths in YAML configuration files and ensure data is mounted correctly
 4. **Evaluation not running**: Ensure `eval_data_dir` is set in YAML and evaluation data directories exist
 5. **Device errors**: Code automatically falls back to CPU if CUDA unavailable
 
