@@ -9,27 +9,27 @@ parameters:
     value: train_2m.csv  # Update with your actual training file path
   
   k:
-    values: [2, 3, 4, 5, 6]
+    values: [2, 3, 4]
   
   dim:
     values: [128, 256, 512]
   
   lr:
-    distribution: log_uniform
+    distribution: log_uniform_values
     min: 0.00001
     max: 0.01
   
   epoch:
-    values: [100, 500, 1000]
+    values: [10, 20, 30, 40, 50]
   
   batch_size:
-    values: [32, 64, 128, 256, 0]  # 0 means full dataset
+    values: [32, 64, 128]  # 0 means full dataset
   
   max_views_per_read:
     values: [2, 4, 8]
   
   max_read_num:
-    values: [1000, 5000, 10000, 0]  # 0 means all
+    values: [100, 200, 300, 400, 500]  # 0 means all
   
   temperature:
     values: [0.05, 0.1, 0.2, 0.5]
@@ -38,7 +38,7 @@ parameters:
     value: 26042024
   
   device:
-    value: cuda
+    value: cpu
   
   workers_num:
     value: 1
@@ -56,11 +56,11 @@ parameters:
     value: online
   
   eval_data_dir:
-    value: null  # Set to your data directory path if you want evaluation
+    value: .  # Path to evaluation data directory (contains reference/, marine/, plant/ subdirectories)
   
   eval_species:
-    value: reference
+    value: reference,marine,plant  # Comma-separated list of species to evaluate (will auto-detect if not specified)
   
   eval_sample:
-    value: 5
+    value: 5,6  # Comma-separated list of sample IDs for evaluation
 

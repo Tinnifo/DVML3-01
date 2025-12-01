@@ -473,7 +473,7 @@ def run(
 def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dict):
     """
     Run evaluation using evaluation/binning.py logic and log metrics to W&B.
-    This is a simplified version that can be extended based on evaluation needs.
+    Evaluates all available species and samples automatically.
     """
     # Import evaluation utilities
     try:
@@ -490,165 +490,221 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
         return
 
     data_dir = eval_config.get("data_dir")
-    species = eval_config.get("species", "reference")
-    sample = eval_config.get("sample", 5)
+    # Support both single species/sample and multiple
+    species_list = eval_config.get("species", "reference")
+    if isinstance(species_list, str):
+        # If it's a comma-separated string, split it
+        if "," in species_list:
+            species_list = [s.strip() for s in species_list.split(",")]
+        else:
+            species_list = [species_list]
+    
+    sample_list = eval_config.get("sample", [5])
+    if isinstance(sample_list, (int, str)):
+        # If it's a single value or comma-separated string
+        if isinstance(sample_list, str) and "," in sample_list:
+            sample_list = [int(s.strip()) for s in sample_list.split(",")]
+        else:
+            sample_list = [int(sample_list)]
+    elif isinstance(sample_list, list):
+        sample_list = [int(s) for s in sample_list]
+    
     k = eval_config.get("k", 4)
     metric = eval_config.get("metric", "l2")
 
     if data_dir is None:
         print("Warning: Evaluation data_dir not provided, skipping evaluation")
         return
+    
+    # Auto-detect available species if data_dir exists
+    if os.path.exists(data_dir):
+        available_species = []
+        for item in os.listdir(data_dir):
+            item_path = os.path.join(data_dir, item)
+            if os.path.isdir(item_path) and os.path.exists(
+                os.path.join(item_path, "clustering_0.tsv")
+            ):
+                available_species.append(item)
+        
+        if available_species:
+            # Use available species if none specified, or filter to available ones
+            if not species_list or species_list == ["reference"]:
+                species_list = available_species
+                print(f"Auto-detected species: {species_list}")
+            else:
+                species_list = [s for s in species_list if s in available_species]
+                print(f"Evaluating species: {species_list}")
 
-    try:
-        # Load clustering data to compute similarity threshold
-        clustering_data_file_path = os.path.join(data_dir, species, "clustering_0.tsv")
-        if not os.path.exists(clustering_data_file_path):
-            print(
-                f"Warning: Clustering data file not found: {clustering_data_file_path}"
-            )
-            return
+    # Evaluate all species and samples
+    all_eval_metrics = {}
+    
+    for species in species_list:
+        for sample in sample_list:
+            try:
+                print(f"\nEvaluating: species={species}, sample={sample}")
+                
+                # Load clustering data to compute similarity threshold
+                clustering_data_file_path = os.path.join(data_dir, species, "clustering_0.tsv")
+                if not os.path.exists(clustering_data_file_path):
+                    print(
+                        f"Warning: Clustering data file not found: {clustering_data_file_path}"
+                    )
+                    continue
 
-        with open(clustering_data_file_path, "r") as f:
-            reader = csv.reader(f, delimiter="\t")
-            data = list(reader)[1:]
+                with open(clustering_data_file_path, "r") as f:
+                    reader = csv.reader(f, delimiter="\t")
+                    data = list(reader)[1:]
 
-        MAX_SEQ_LEN = 20000
-        dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
-        labels = [d[1] for d in data]
+                MAX_SEQ_LEN = 20000
+                dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
+                labels = [d[1] for d in data]
 
-        # Convert labels to numeric values
-        label2id = {l: i for i, l in enumerate(set(labels))}
-        labels = np.array([label2id[l] for l in labels])
-        num_clusters = len(label2id)
+                # Convert labels to numeric values
+                label2id = {l: i for i, l in enumerate(set(labels))}
+                labels = np.array([label2id[l] for l in labels])
+                num_clusters = len(label2id)
 
-        # Get embeddings
-        embedding = get_embedding(
-            dna_sequences=dna_sequences,
-            model_name="our",
-            species=species,
-            sample=0,
-            k=k,
-            task_name="clustering",
-            test_model_dir=model_path,
-            suffix="",
-        )
+                # Get embeddings
+                embedding = get_embedding(
+                    dna_sequences=dna_sequences,
+                    model_name="our",
+                    species=species,
+                    sample=0,
+                    k=k,
+                    task_name="clustering",
+                    test_model_dir=model_path,
+                    suffix="",
+                )
 
-        # Compute threshold
-        from evaluation.utils import compute_class_center_medium_similarity
+                # Compute threshold
+                from evaluation.utils import compute_class_center_medium_similarity
 
-        percentile_values = compute_class_center_medium_similarity(
-            embedding, labels, metric=metric
-        )
-        threshold = percentile_values[-3]
+                percentile_values = compute_class_center_medium_similarity(
+                    embedding, labels, metric=metric
+                )
+                threshold = percentile_values[-3]
 
-        # Load binning data
-        data_file = os.path.join(data_dir, species, f"binning_{sample}.tsv")
-        if not os.path.exists(data_file):
-            print(f"Warning: Binning data file not found: {data_file}")
-            return
+                # Load binning data
+                data_file = os.path.join(data_dir, species, f"binning_{sample}.tsv")
+                if not os.path.exists(data_file):
+                    print(f"Warning: Binning data file not found: {data_file}")
+                    continue
 
-        with open(data_file, "r") as f:
-            reader = csv.reader(f, delimiter="\t")
-            data = list(reader)[1:]
+                with open(data_file, "r") as f:
+                    reader = csv.reader(f, delimiter="\t")
+                    data = list(reader)[1:]
 
-        dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
-        labels_bin = [d[1] for d in data]
+                dna_sequences = [d[0][:MAX_SEQ_LEN] for d in data]
+                labels_bin = [d[1] for d in data]
 
-        # Filter sequences
-        MIN_SEQ_LEN = 2500
-        MIN_ABUNDANCE_VALUE = 10
-        filterd_idx = [
-            i for i, seq in enumerate(dna_sequences) if len(seq) >= MIN_SEQ_LEN
-        ]
-        dna_sequences = [dna_sequences[i] for i in filterd_idx]
-        labels_bin = [labels_bin[i] for i in filterd_idx]
+                # Filter sequences
+                MIN_SEQ_LEN = 2500
+                MIN_ABUNDANCE_VALUE = 10
+                filterd_idx = [
+                    i for i, seq in enumerate(dna_sequences) if len(seq) >= MIN_SEQ_LEN
+                ]
+                dna_sequences = [dna_sequences[i] for i in filterd_idx]
+                labels_bin = [labels_bin[i] for i in filterd_idx]
 
-        label_counts = collections.Counter(labels_bin)
-        filterd_idx = [
-            i
-            for i, l in enumerate(labels_bin)
-            if label_counts[l] >= MIN_ABUNDANCE_VALUE
-        ]
-        dna_sequences = [dna_sequences[i] for i in filterd_idx]
-        labels_bin = [labels_bin[i] for i in filterd_idx]
+                label_counts = collections.Counter(labels_bin)
+                filterd_idx = [
+                    i
+                    for i, l in enumerate(labels_bin)
+                    if label_counts[l] >= MIN_ABUNDANCE_VALUE
+                ]
+                dna_sequences = [dna_sequences[i] for i in filterd_idx]
+                labels_bin = [labels_bin[i] for i in filterd_idx]
 
-        label2id = {l: i for i, l in enumerate(set(labels_bin))}
-        labels_bin = np.array([label2id[l] for l in labels_bin])
-        num_clusters_bin = len(label2id)
+                label2id = {l: i for i, l in enumerate(set(labels_bin))}
+                labels_bin = np.array([label2id[l] for l in labels_bin])
+                num_clusters_bin = len(label2id)
 
-        # Generate embeddings for binning set
-        embedding = get_embedding(
-            dna_sequences,
-            "our",
-            species,
-            sample,
-            k=k,
-            metric=metric,
-            task_name="binning",
-            test_model_dir=model_path,
-            suffix="",
-        )
+                # Generate embeddings for binning set
+                embedding = get_embedding(
+                    dna_sequences,
+                    "our",
+                    species,
+                    sample,
+                    k=k,
+                    metric=metric,
+                    task_name="binning",
+                    test_model_dir=model_path,
+                    suffix="",
+                )
 
-        # Run KMedoid algorithm
-        binning_results = KMedoid(
-            embedding,
-            min_similarity=threshold,
-            min_bin_size=10,
-            max_iter=1000,
-            metric=metric,
-            scalable=False,
-        )
+                # Run KMedoid algorithm
+                binning_results = KMedoid(
+                    embedding,
+                    min_similarity=threshold,
+                    min_bin_size=10,
+                    max_iter=1000,
+                    metric=metric,
+                    scalable=False,
+                )
 
-        # Get metrics
-        true_labels_bin = labels_bin[binning_results != -1]
-        predicted_labels = binning_results[binning_results != -1]
+                # Get metrics
+                true_labels_bin = labels_bin[binning_results != -1]
+                predicted_labels = binning_results[binning_results != -1]
 
-        if len(predicted_labels) == 0:
-            print("Warning: No predicted labels after binning")
-            return
+                if len(predicted_labels) == 0:
+                    print(f"Warning: No predicted labels after binning for {species} sample {sample}")
+                    continue
 
-        # Align labels
-        alignment_bin = align_labels_via_hungarian_algorithm(
-            true_labels_bin, predicted_labels
-        )
-        predicted_labels_bin = [alignment_bin[label] for label in predicted_labels]
+                # Align labels
+                alignment_bin = align_labels_via_hungarian_algorithm(
+                    true_labels_bin, predicted_labels
+                )
+                predicted_labels_bin = [alignment_bin[label] for label in predicted_labels]
 
-        # Calculate metrics
-        recall_bin = sklearn.metrics.recall_score(
-            true_labels_bin, predicted_labels_bin, average=None, zero_division=0
-        )
-        recall_bin.sort()
+                # Calculate metrics
+                recall_bin = sklearn.metrics.recall_score(
+                    true_labels_bin, predicted_labels_bin, average=None, zero_division=0
+                )
+                recall_bin.sort()
 
-        f1_bin = sklearn.metrics.f1_score(
-            true_labels_bin, predicted_labels_bin, average=None, zero_division=0
-        )
-        f1_bin.sort()
+                f1_bin = sklearn.metrics.f1_score(
+                    true_labels_bin, predicted_labels_bin, average=None, zero_division=0
+                )
+                f1_bin.sort()
 
-        thresholds_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        recall_results = []
-        f1_results = []
-        for thresh in thresholds_list:
-            recall_results.append(len(np.where(recall_bin > thresh)[0]))
-            f1_results.append(len(np.where(f1_bin > thresh)[0]))
+                thresholds_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+                recall_results = []
+                f1_results = []
+                for thresh in thresholds_list:
+                    recall_results.append(len(np.where(recall_bin > thresh)[0]))
+                    f1_results.append(len(np.where(f1_bin > thresh)[0]))
 
-        # Log to W&B
-        eval_metrics = {
-            "eval/threshold": threshold,
-            "eval/num_clusters": num_clusters_bin,
-            "eval/num_sequences": len(dna_sequences),
-            "eval/num_predicted": len(predicted_labels),
-        }
+                # Store metrics with species and sample prefix
+                prefix = f"eval/{species}_sample{sample}"
+                all_eval_metrics[f"{prefix}/threshold"] = threshold
+                all_eval_metrics[f"{prefix}/num_clusters"] = num_clusters_bin
+                all_eval_metrics[f"{prefix}/num_sequences"] = len(dna_sequences)
+                all_eval_metrics[f"{prefix}/num_predicted"] = len(predicted_labels)
 
-        for i, thresh in enumerate(thresholds_list):
-            eval_metrics[f"eval/recall_at_{thresh}"] = recall_results[i]
-            eval_metrics[f"eval/f1_at_{thresh}"] = f1_results[i]
+                for i, thresh in enumerate(thresholds_list):
+                    all_eval_metrics[f"{prefix}/recall_at_{thresh}"] = recall_results[i]
+                    all_eval_metrics[f"{prefix}/f1_at_{thresh}"] = f1_results[i]
+                
+                # Also log a summary metric for sweep optimization (use first species/sample or average)
+                if species == species_list[0] and sample == sample_list[0]:
+                    all_eval_metrics["eval/f1_at_0.5"] = f1_results[4]  # Index 4 = threshold 0.5
+                    all_eval_metrics["eval/recall_at_0.5"] = recall_results[4]
+                
+                print(f"  ✓ Completed: {species} sample {sample} - F1@0.5: {f1_results[4]}")
 
-        wandb.log(eval_metrics)
-        print(f"Evaluation metrics logged to W&B: {eval_metrics}")
-
-    except Exception as e:
-        print(f"Error during evaluation: {e}")
-        import traceback
+            except Exception as e:
+                print(f"Error evaluating {species} sample {sample}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+    
+    # Log all metrics to W&B
+    if all_eval_metrics:
+        wandb.log(all_eval_metrics)
+        print(f"\n✓ All evaluation metrics logged to W&B")
+        print(f"  Total metrics logged: {len(all_eval_metrics)}")
+    else:
+        print("\n⚠ No evaluation metrics were generated")
 
         traceback.print_exc()
         raise
@@ -737,15 +793,26 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--eval_sample",
-        type=int,
-        default=5,
-        help="Sample ID for evaluation",
+        type=str,
+        default="5",
+        help="Sample ID(s) for evaluation (comma-separated, e.g., '5,6')",
     )
     args = parser.parse_args()
 
     set_seed(args.seed)
 
-    device = torch.device(args.device)
+    # Handle device selection with fallback
+    if args.device == "cuda" and not torch.cuda.is_available():
+        print(f"Warning: CUDA requested but not available. Falling back to CPU.")
+        device = torch.device("cpu")
+    elif args.device == "mps":
+        if not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available():
+            print(f"Warning: MPS requested but not available. Falling back to CPU.")
+            device = torch.device("cpu")
+        else:
+            device = torch.device("mps")
+    else:
+        device = torch.device(args.device)
     model = NonLinearModel(
         k=args.k,
         dim=args.dim,
@@ -803,8 +870,8 @@ if __name__ == "__main__":
             "evaluation": {
                 "enabled": args.eval_data_dir is not None,
                 "data_dir": args.eval_data_dir,
-                "species": args.eval_species,
-                "sample": args.eval_sample,
+                "species": args.eval_species,  # Can be comma-separated string or list
+                "sample": args.eval_sample,  # Can be comma-separated string or list
                 "k": args.k,
                 "metric": "l2",
             },
