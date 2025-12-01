@@ -1,5 +1,6 @@
 program: src/OUR.py
-method: random  # Options: grid, random, bayes (random recommended for large search spaces)
+method: grid  # Options: grid, random, bayes (random recommended for large search spaces)
+run_cap: 5  # Maximum number of runs for this sweep (optional, remove for unlimited)
 metric:
   name: eval/f1_at_0.5
   goal: maximize
@@ -12,12 +13,10 @@ parameters:
     values: [2, 3, 4]
   
   dim:
-    values: [128, 256, 512]
+    values: [256]
   
   lr:
-    distribution: log_uniform_values
-    min: 0.00001
-    max: 0.01
+    values: [0.00001, 0.0001, 0.001, 0.01]  
   
   epoch:
     values: [10, 20, 30, 40, 50]
@@ -38,7 +37,7 @@ parameters:
     value: 26042024
   
   device:
-    value: cpu
+    value: cuda
   
   workers_num:
     value: 1
@@ -59,8 +58,8 @@ parameters:
     value: .  # Path to evaluation data directory (contains reference/, marine/, plant/ subdirectories)
   
   eval_species:
-    value: reference,marine,plant  # Comma-separated list of species to evaluate (will auto-detect if not specified)
+    value: reference  # Comma-separated list of species to evaluate (will auto-detect if not specified)
   
   eval_sample:
-    value: 5,6  # Comma-separated list of sample IDs for evaluation
+    value: 5  # Comma-separated list of sample IDs for evaluation
 
