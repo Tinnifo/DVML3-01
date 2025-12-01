@@ -395,6 +395,7 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
     """
     # Add project root to Python path for evaluation imports
     import sys
+    import traceback
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
@@ -636,13 +637,17 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
     # Log all metrics to W&B
     if all_eval_metrics:
         wandb.log(all_eval_metrics)
+        # Also log as summary for better visibility in W&B UI
+        for key, value in all_eval_metrics.items():
+            wandb.run.summary[key] = value
+        wandb.run.summary.update(all_eval_metrics)
         print(f"\n✓ All evaluation metrics logged to W&B")
         print(f"  Total metrics logged: {len(all_eval_metrics)}")
     else:
         print("\n⚠ No evaluation metrics were generated")
-
         traceback.print_exc()
-        raise
+        # Don't raise - just log the error so the run completes
+        wandb.log({"evaluation_warning": "No evaluation metrics were generated"})
 
 
 if __name__ == "__main__":

@@ -10,10 +10,11 @@ from torch.utils.data import Dataset, DataLoader
 import wandb
 import os
 
-# Suppress urllib3 OpenSSL warning on macOS (harmless, just noise)
+# Suppress urllib3 OpenSSL warning on macOS
 warnings.filterwarnings("ignore", message=".*urllib3.*OpenSSL.*")
 try:
     import urllib3
+
     urllib3.disable_warnings(urllib3.exceptions.NotOpenSSLWarning)
 except (ImportError, AttributeError):
     pass
@@ -489,15 +490,16 @@ def run(
 
 def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dict):
     """
-    Run evaluation using evaluation/binning.py logic and log metrics to W&B.
-    Evaluates all available species and samples automatically.
+    Run evaluation using evaluation and log metrics to W&B.
     """
     # Add project root to Python path for evaluation imports
     import sys
+    import traceback
+
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-    
+
     # Import evaluation utilities
     try:
         from evaluation.utils import (
@@ -521,7 +523,7 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
             species_list = [s.strip() for s in species_list.split(",")]
         else:
             species_list = [species_list]
-    
+
     sample_list = eval_config.get("sample", [5])
     if isinstance(sample_list, (int, str)):
         # If it's a single value or comma-separated string
@@ -531,14 +533,14 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
             sample_list = [int(sample_list)]
     elif isinstance(sample_list, list):
         sample_list = [int(s) for s in sample_list]
-    
+
     k = eval_config.get("k", 4)
     metric = eval_config.get("metric", "l2")
 
     if data_dir is None:
         print("Warning: Evaluation data_dir not provided, skipping evaluation")
         return
-    
+
     # Auto-detect available species if data_dir exists
     if os.path.exists(data_dir):
         available_species = []
@@ -548,7 +550,7 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
                 os.path.join(item_path, "clustering_0.tsv")
             ):
                 available_species.append(item)
-        
+
         if available_species:
             # Use available species if none specified, or filter to available ones
             if not species_list:
@@ -563,14 +565,16 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
     # Collect F1@0.5 and recall@0.5 from all species/samples for aggregation
     f1_at_05_values = []
     recall_at_05_values = []
-    
+
     for species in species_list:
         for sample in sample_list:
             try:
                 print(f"\nEvaluating: species={species}, sample={sample}")
-                
+
                 # Load clustering data to compute similarity threshold
-                clustering_data_file_path = os.path.join(data_dir, species, "clustering_0.tsv")
+                clustering_data_file_path = os.path.join(
+                    data_dir, species, "clustering_0.tsv"
+                )
                 if not os.path.exists(clustering_data_file_path):
                     print(
                         f"Warning: Clustering data file not found: {clustering_data_file_path}"
@@ -673,14 +677,18 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
                 predicted_labels = binning_results[binning_results != -1]
 
                 if len(predicted_labels) == 0:
-                    print(f"Warning: No predicted labels after binning for {species} sample {sample}")
+                    print(
+                        f"Warning: No predicted labels after binning for {species} sample {sample}"
+                    )
                     continue
 
                 # Align labels
                 alignment_bin = align_labels_via_hungarian_algorithm(
                     true_labels_bin, predicted_labels
                 )
-                predicted_labels_bin = [alignment_bin[label] for label in predicted_labels]
+                predicted_labels_bin = [
+                    alignment_bin[label] for label in predicted_labels
+                ]
 
                 # Calculate metrics
                 recall_bin = sklearn.metrics.recall_score(
@@ -710,38 +718,49 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
                 for i, thresh in enumerate(thresholds_list):
                     all_eval_metrics[f"{prefix}/recall_at_{thresh}"] = recall_results[i]
                     all_eval_metrics[f"{prefix}/f1_at_{thresh}"] = f1_results[i]
-                
+
                 # Collect F1@0.5 and recall@0.5 for aggregation across all species/samples
                 f1_at_05_values.append(f1_results[4])  # Index 4 = threshold 0.5
                 recall_at_05_values.append(recall_results[4])
-                
-                print(f"  ✓ Completed: {species} sample {sample} - F1@0.5: {f1_results[4]}")
+
+                print(
+                    f"  ✓ Completed: {species} sample {sample} - F1@0.5: {f1_results[4]}"
+                )
 
             except Exception as e:
                 print(f"Error evaluating {species} sample {sample}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 continue
-    
+
     # Compute aggregated summary metrics for sweep optimization
     if f1_at_05_values:
         # Use mean across all species/samples
         all_eval_metrics["eval/f1_at_0.5"] = np.mean(f1_at_05_values)
         all_eval_metrics["eval/recall_at_0.5"] = np.mean(recall_at_05_values)
-        all_eval_metrics["eval/f1_at_0.5_std"] = np.std(f1_at_05_values)  # Also log std for insight
+        all_eval_metrics["eval/f1_at_0.5_std"] = np.std(
+            f1_at_05_values
+        )  # Also log std for insight
         all_eval_metrics["eval/recall_at_0.5_std"] = np.std(recall_at_05_values)
-        print(f"\n✓ Aggregated metrics: F1@0.5 = {np.mean(f1_at_05_values):.2f} (std: {np.std(f1_at_05_values):.2f}) across {len(f1_at_05_values)} species/sample combinations")
-    
+        print(
+            f"\n✓ Aggregated metrics: F1@0.5 = {np.mean(f1_at_05_values):.2f} (std: {np.std(f1_at_05_values):.2f}) across {len(f1_at_05_values)} species/sample combinations"
+        )
+
     # Log all metrics to W&B
     if all_eval_metrics:
         wandb.log(all_eval_metrics)
+        # Also log as summary for better visibility in W&B UI
+        for key, value in all_eval_metrics.items():
+            wandb.run.summary[key] = value
+        wandb.run.summary.update(all_eval_metrics)
         print(f"\n✓ All evaluation metrics logged to W&B")
         print(f"  Total metrics logged: {len(all_eval_metrics)}")
     else:
         print("\n⚠ No evaluation metrics were generated")
-
         traceback.print_exc()
-        raise
+        # Don't raise - just log the error so the run completes
+        wandb.log({"evaluation_warning": "No evaluation metrics were generated"})
 
 
 if __name__ == "__main__":
