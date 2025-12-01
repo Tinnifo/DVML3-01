@@ -11,7 +11,6 @@ Docker ensures the project works on all computers regardless of local Python/pac
 ### Prerequisites
 
 1. **Install Docker**: Download and install Docker from [docker.com](https://www.docker.com/get-started)
-2. **For GPU support**: Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
 3. **Install gdown** (if you don't already have it) for downloading the datasets:
    ```bash
    pip install gdown
@@ -46,7 +45,7 @@ Docker ensures the project works on all computers regardless of local Python/pac
 
 4. **Run sweeps with Docker**:
 
-   **For GPU (recommended):**
+   **For GPU:**
    ```bash
    # For OUR model
    docker run --gpus all \
@@ -61,12 +60,19 @@ Docker ensures the project works on all computers regardless of local Python/pac
      dna-embedding python sweeps/run_revisit_sweep.py
    ```
 
-   **For CPU-only:**
+   **For CPU:**
    ```bash
+   # For OUR model
    docker run \
      -v $(pwd):/app \
      -w /app \
      dna-embedding python sweeps/run_our_sweep.py
+
+   # For REVISIT model
+   docker run \
+     -v $(pwd):/app \
+     -w /app \
+     dna-embedding python sweeps/run_revisit_sweep.py
    ```
 
 **Note:** 
