@@ -9,7 +9,8 @@
 marine/
 plant/
 reference/
-/wandb/
+wandb/
+embeddings/
 
 # Python
 __pycache__/

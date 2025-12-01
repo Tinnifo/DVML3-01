@@ -551,7 +551,7 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
         
         if available_species:
             # Use available species if none specified, or filter to available ones
-            if not species_list or species_list == ["reference"]:
+            if not species_list:
                 species_list = available_species
                 print(f"Auto-detected species: {species_list}")
             else:
@@ -560,6 +560,9 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
 
     # Evaluate all species and samples
     all_eval_metrics = {}
+    # Collect F1@0.5 and recall@0.5 from all species/samples for aggregation
+    f1_at_05_values = []
+    recall_at_05_values = []
     
     for species in species_list:
         for sample in sample_list:
@@ -708,10 +711,9 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
                     all_eval_metrics[f"{prefix}/recall_at_{thresh}"] = recall_results[i]
                     all_eval_metrics[f"{prefix}/f1_at_{thresh}"] = f1_results[i]
                 
-                # Also log a summary metric for sweep optimization (use first species/sample or average)
-                if species == species_list[0] and sample == sample_list[0]:
-                    all_eval_metrics["eval/f1_at_0.5"] = f1_results[4]  # Index 4 = threshold 0.5
-                    all_eval_metrics["eval/recall_at_0.5"] = recall_results[4]
+                # Collect F1@0.5 and recall@0.5 for aggregation across all species/samples
+                f1_at_05_values.append(f1_results[4])  # Index 4 = threshold 0.5
+                recall_at_05_values.append(recall_results[4])
                 
                 print(f"  ✓ Completed: {species} sample {sample} - F1@0.5: {f1_results[4]}")
 
@@ -720,6 +722,15 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
                 import traceback
                 traceback.print_exc()
                 continue
+    
+    # Compute aggregated summary metrics for sweep optimization
+    if f1_at_05_values:
+        # Use mean across all species/samples
+        all_eval_metrics["eval/f1_at_0.5"] = np.mean(f1_at_05_values)
+        all_eval_metrics["eval/recall_at_0.5"] = np.mean(recall_at_05_values)
+        all_eval_metrics["eval/f1_at_0.5_std"] = np.std(f1_at_05_values)  # Also log std for insight
+        all_eval_metrics["eval/recall_at_0.5_std"] = np.std(recall_at_05_values)
+        print(f"\n✓ Aggregated metrics: F1@0.5 = {np.mean(f1_at_05_values):.2f} (std: {np.std(f1_at_05_values):.2f}) across {len(f1_at_05_values)} species/sample combinations")
     
     # Log all metrics to W&B
     if all_eval_metrics:
