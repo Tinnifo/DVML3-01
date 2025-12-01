@@ -4,14 +4,13 @@ Two DNA sequence embedding models using k-mer representations:
 - **OUR**: Supervised Contrastive Learning with multi-view representations
 - **REVISIT**: Pairwise learning with negative sampling
 
-## Docker Setup
-
-Docker ensures the project works on all computers regardless of local Python/package setup.
+## Local Setup
 
 ### Prerequisites
 
-1. **Install Docker**: Download and install Docker from [docker.com](https://www.docker.com/get-started)
-3. **Install gdown** (if you don't already have it) for downloading the datasets:
+1. **Python 3.8+**: Ensure Python 3.8 or higher is installed on your system
+2. **CUDA (optional)**: For GPU support, install CUDA-compatible PyTorch. The requirements will install CPU version by default.
+3. **gdown** (if you don't already have it) for downloading the datasets:
    ```bash
    pip install gdown
    ```
@@ -24,7 +23,25 @@ Docker ensures the project works on all computers regardless of local Python/pac
    cd DVML3-01
    ```
 
-2. **Download datasets** to your local machine:
+2. **Create a virtual environment** (recommended):
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+
+   **For GPU support**, install PyTorch with CUDA:
+   ```bash
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+   pip install -r requirements.txt
+   ```
+
+4. **Download datasets**:
 
    **Training dataset:**
    ```bash
@@ -38,48 +55,27 @@ Docker ensures the project works on all computers regardless of local Python/pac
    unzip dnabert-s_eval.zip
    ```
 
-3. **Build the Docker image**:
+5. **Set up Weights & Biases** (if using W&B for tracking):
    ```bash
-   docker build -t dna-embedding .
+   wandb login
    ```
 
-4. **Run sweeps with Docker**:
+6. **Run sweeps**:
 
-   **For GPU:**
+   **For OUR model:**
    ```bash
-   # For OUR model
-   docker run --gpus all \
-     -v $(pwd):/app \
-     -w /app \
-     dna-embedding python sweeps/run_our_sweep.py
-
-   # For REVISIT model
-   docker run --gpus all \
-     -v $(pwd):/app \
-     -w /app \
-     dna-embedding python sweeps/run_revisit_sweep.py
+   python sweeps/run_our_sweep.py
    ```
 
-   **For CPU:**
+   **For REVISIT model:**
    ```bash
-   # For OUR model
-   docker run \
-     -v $(pwd):/app \
-     -w /app \
-     dna-embedding python sweeps/run_our_sweep.py
-
-   # For REVISIT model
-   docker run \
-     -v $(pwd):/app \
-     -w /app \
-     dna-embedding python sweeps/run_revisit_sweep.py
+   python sweeps/run_revisit_sweep.py
    ```
 
 **Note:** 
-- The entire project directory is mounted to `/app` in the container
-- All data files, models, and outputs remain on your host machine
+- Make sure your virtual environment is activated before running commands
 - The YAML files use relative paths (`train_2m.csv`, `.` for eval_data_dir) which work correctly with this setup
-- The Docker container provides a consistent environment across all systems
+- All data files, models, and outputs will be created in the project directory
 
 ## Running Hyperparameter Sweeps
 
@@ -115,7 +111,6 @@ DVML3-01/
 ├── marine/                 # Evaluation data
 ├── plant/                   # Evaluation data
 ├── models/                  # Model outputs (created automatically)
-├── Dockerfile              # Docker configuration
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
@@ -132,10 +127,12 @@ ATCGATCG...,GCTAGCTA...
 ## Troubleshooting
 
 1. **CUDA out of memory**: Reduce batch size or use `--device cpu` in YAML config
-2. **W&B authentication error**: Run `wandb login` inside the Docker container or mount your W&B credentials
-3. **File not found**: Check data paths in YAML configuration files and ensure data is mounted correctly
+2. **W&B authentication error**: Run `wandb login` in your terminal
+3. **File not found**: Check data paths in YAML configuration files and ensure data files exist in the project directory
 4. **Evaluation not running**: Ensure `eval_data_dir` is set in YAML and evaluation data directories exist
 5. **Device errors**: Code automatically falls back to CPU if CUDA unavailable
+6. **Import errors**: Make sure you're in the project root directory and your virtual environment is activated
+7. **Python path issues**: If you encounter module import errors, ensure you're running commands from the project root directory
 
 ## Monitoring
 
