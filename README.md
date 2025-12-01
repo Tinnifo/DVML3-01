@@ -11,9 +11,8 @@ Docker ensures the project works on all computers regardless of local Python/pac
 ### Prerequisites
 
 1. **Install Docker**: Download and install Docker from [docker.com](https://www.docker.com/get-started)
-2. **Install Docker Compose** (optional, for easier management)
-3. **For GPU support**: Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-4. **Install gdown** (if you don't already have it) for downloading the datasets:
+2. **For GPU support**: Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+3. **Install gdown** (if you don't already have it) for downloading the datasets:
    ```bash
    pip install gdown
    ```
@@ -45,55 +44,35 @@ Docker ensures the project works on all computers regardless of local Python/pac
    docker build -t dna-embedding .
    ```
 
-4. **Prepare your data directory structure**:
-   ```
-   your-project/
-   ├── data/
-   │   ├── train_2m.csv          # Training data
-   │   ├── reference/            # Evaluation data
-   │   ├── marine/               # Evaluation data
-   │   └── plant/                 # Evaluation data
-   ├── models/                    # Model outputs (created automatically)
-   └── DVML3-01/                 # This repository
-   ```
-
-5. **Update YAML configuration files** to use Docker paths:
-   - In `sweeps/our_sweep.yaml` and `sweeps/revisit_sweep.yaml`, set:
-     - `input: /app/data/train_2m.csv`
-     - `eval_data_dir: /app/data`
-     - `output: /app/models/our_model.pt` (or `revisit_model.pt`)
-
-6. **Run sweeps with Docker**:
+4. **Run sweeps with Docker**:
 
    **For GPU (recommended):**
    ```bash
    # For OUR model
    docker run --gpus all \
-     -v $(pwd)/data:/app/data \
-     -v $(pwd)/models:/app/models \
-     -v $(pwd)/wandb:/app/wandb \
+     -v $(pwd):/app \
+     -w /app \
      dna-embedding python sweeps/run_our_sweep.py
 
    # For REVISIT model
    docker run --gpus all \
-     -v $(pwd)/data:/app/data \
-     -v $(pwd)/models:/app/models \
-     -v $(pwd)/wandb:/app/wandb \
+     -v $(pwd):/app \
+     -w /app \
      dna-embedding python sweeps/run_revisit_sweep.py
    ```
 
    **For CPU-only:**
    ```bash
    docker run \
-     -v $(pwd)/data:/app/data \
-     -v $(pwd)/models:/app/models \
-     -v $(pwd)/wandb:/app/wandb \
+     -v $(pwd):/app \
+     -w /app \
      dna-embedding python sweeps/run_our_sweep.py
    ```
 
 **Note:** 
-- Data files are mounted as volumes, so they remain on your host machine
-- Model outputs and W&B logs are saved to your host machine via volume mounts
+- The entire project directory is mounted to `/app` in the container
+- All data files, models, and outputs remain on your host machine
+- The YAML files use relative paths (`train_2m.csv`, `.` for eval_data_dir) which work correctly with this setup
 - The Docker container provides a consistent environment across all systems
 
 ## Running Hyperparameter Sweeps
@@ -125,6 +104,11 @@ DVML3-01/
 │   └── run_revisit_sweep.py # REVISIT sweep runner
 ├── evaluation/
 │   └── utils.py            # Evaluation utilities (required)
+├── train_2m.csv            # Training data
+├── reference/              # Evaluation data
+├── marine/                 # Evaluation data
+├── plant/                   # Evaluation data
+├── models/                  # Model outputs (created automatically)
 ├── Dockerfile              # Docker configuration
 ├── requirements.txt        # Python dependencies
 └── README.md
