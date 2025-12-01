@@ -8,7 +8,7 @@ Two DNA sequence embedding models using k-mer representations:
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/Tinnifo/DVML3-01.git
    cd DVML3-01
    ```
 
@@ -21,6 +21,120 @@ Two DNA sequence embedding models using k-mer representations:
    ```bash
    wandb login
    ```
+
+4. **Install gdown** (if you don't already have it) for downloading the datasets:
+   ```bash
+   pip install gdown
+   ```
+
+## Datasets
+
+To download and prepare the training dataset, run the following commands:
+
+```bash
+gdown 1p59ch_MO-9DXh3LUIvorllPJGLEAwsUp
+unzip dnabert-s_train.zip
+```
+
+To download the evaluation datasets, use the following commands:
+
+```bash
+gdown 1I44T2alXrtXPZrhkuca6QP3tFHxDW98c
+unzip dnabert-s_eval.zip
+```
+
+## Docker Setup (Recommended)
+
+Docker ensures the project works on all computers regardless of local Python/package setup.
+
+### Prerequisites
+
+1. **Install Docker**: Download and install Docker from [docker.com](https://www.docker.com/get-started)
+2. **Install Docker Compose** (optional, for easier management)
+3. **For GPU support**: Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+### Setup Steps
+
+1. **Download datasets** (see [Datasets](#datasets) section above) to your local machine
+
+2. **Build the Docker image**:
+   ```bash
+   docker build -t dna-embedding .
+   ```
+
+3. **Prepare your data directory structure**:
+   ```
+   your-project/
+   ├── data/
+   │   ├── train_2m.csv          # Training data
+   │   ├── reference/            # Evaluation data
+   │   ├── marine/               # Evaluation data
+   │   └── plant/                 # Evaluation data
+   ├── models/                    # Model outputs (created automatically)
+   └── DVML3-01/                 # This repository
+   ```
+
+4. **Run sweeps with Docker**:
+
+   **For GPU (recommended):**
+   ```bash
+   # For OUR model
+   docker run --gpus all \
+     -v $(pwd)/data:/app/data \
+     -v $(pwd)/models:/app/models \
+     -v $(pwd)/wandb:/app/wandb \
+     dna-embedding python sweeps/run_our_sweep.py
+
+   # For REVISIT model
+   docker run --gpus all \
+     -v $(pwd)/data:/app/data \
+     -v $(pwd)/models:/app/models \
+     -v $(pwd)/wandb:/app/wandb \
+     dna-embedding python sweeps/run_revisit_sweep.py
+   ```
+
+   **For CPU-only:**
+   ```bash
+   docker run \
+     -v $(pwd)/data:/app/data \
+     -v $(pwd)/models:/app/models \
+     -v $(pwd)/wandb:/app/wandb \
+     dna-embedding python sweeps/run_our_sweep.py
+   ```
+
+5. **Update YAML configuration files** to use Docker paths:
+   - In `sweeps/our_sweep.yaml` and `sweeps/revisit_sweep.yaml`, set:
+     - `input: /app/data/train_2m.csv`
+     - `eval_data_dir: /app/data`
+     - `output: /app/models/our_model.pt` (or `revisit_model.pt`)
+
+**Note:** 
+- Data files are mounted as volumes, so they remain on your host machine
+- Model outputs and W&B logs are saved to your host machine via volume mounts
+- The Docker container provides a consistent environment across all systems
+
+Docker ensures the project works on all computers regardless of local Python/package setup.
+
+1. **Build the Docker image**:
+   ```bash
+   docker build -t dna-embedding .
+   ```
+
+2. **Download your data** to your local machine (e.g., `./data/` directory)
+
+3. **Run sweeps with Docker** (mount your data directory):
+   ```bash
+   # For OUR model (with GPU)
+   docker run --gpus all -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models dna-embedding python sweeps/run_our_sweep.py
+
+   # For REVISIT model (with GPU)
+   docker run --gpus all -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models dna-embedding python sweeps/run_revisit_sweep.py
+
+   # For CPU-only (no GPU)
+   docker run -v $(pwd)/data:/app/data -v $(pwd)/models:/app/models dna-embedding python sweeps/run_our_sweep.py
+   ```
+
+**Note:** Make sure your YAML configuration files point to the correct data paths (e.g., `/app/data/train_2m.csv` and `/app/data/` for evaluation data).
 
 ## Running Hyperparameter Sweeps
 

@@ -1,0 +1,77 @@
+# Data files (users will mount these as volumes)
+*.csv
+*.zip
+*.tar.gz
+*.tar
+*.gz
+
+# Data directories (users will mount these as volumes)
+marine/
+plant/
+reference/
+
+# Generated files
+wandb/
+embeddings/
+models/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build artifacts
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# Model checkpoints (users will mount these as volumes)
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.hdf5
+checkpoints/
+outputs/
+
