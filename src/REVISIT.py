@@ -267,16 +267,60 @@ def single_epoch(model, loss_func, optimizer, training_loader, loss_name="bern")
     return epoch_loss / len(training_loader)
 
 
+def validate_epoch(model, loss_func, validation_loader, loss_name="bern"):
+    """
+    Validate the model on validation data without updating weights.
+    Returns validation loss.
+    """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model.eval()
+    val_loss = 0.0
+
+    with torch.no_grad():
+        for data in validation_loader:
+            left_kmer_profile, right_kmer_profile, labels = data
+
+            left_kmer_profile = left_kmer_profile.reshape(
+                -1, left_kmer_profile.shape[-1]
+            ).to(device)
+            right_kmer_profile = right_kmer_profile.reshape(
+                -1, right_kmer_profile.shape[-1]
+            ).to(device)
+            labels = labels.reshape(-1).to(device)
+
+            # Make predictions
+            left_output, right_output = model(left_kmer_profile, right_kmer_profile)
+
+            # Compute the loss (no backprop)
+            batch_loss = loss_func(left_output, right_output, labels, name=loss_name)
+
+            val_loss += batch_loss.item()
+            del (
+                batch_loss,
+                left_kmer_profile,
+                right_kmer_profile,
+                labels,
+                left_output,
+                right_output,
+            )
+            torch.cuda.empty_cache()
+
+    model.train()
+    return val_loss / len(validation_loader)
+
+
 def run(
     model,
     learning_rate,
     epoch_num,
     training_loader,
+    validation_loader=None,
     loss_name="bern",
     model_save_path=None,
     checkpoint=0,
     verbose=True,
     wandb_config: dict = None,
+    early_stopping_patience: int = 0,
 ):
     # Initialize W&B if config is provided
     if wandb_config is not None and wandb_config.get("enabled", False):
@@ -301,6 +345,13 @@ def run(
 
     if verbose:
         print("Training has just started.")
+        if validation_loader is not None:
+            print("Validation enabled - will compute validation loss each epoch.")
+
+    # Early stopping variables
+    best_val_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
 
     for epoch in range(epoch_num):
         if verbose:
@@ -308,12 +359,45 @@ def run(
 
         avg_loss = single_epoch(model, loss_func, optimizer, training_loader, loss_name)
 
-        if verbose:
-            print(f"Epoch {epoch + 1}, Training Loss: {avg_loss}")
+        # Compute validation loss if validation loader is provided
+        val_loss = None
+        if validation_loader is not None:
+            val_loss = validate_epoch(model, loss_func, validation_loader, loss_name)
+            if verbose:
+                print(f"Epoch {epoch + 1}, Training Loss: {avg_loss}, Validation Loss: {val_loss}")
+
+            # Early stopping logic
+            if early_stopping_patience > 0:
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                    # Save best model state
+                    if isinstance(model, torch.nn.DataParallel):
+                        best_model_state = model.module.state_dict().copy()
+                    else:
+                        best_model_state = model.state_dict().copy()
+                else:
+                    patience_counter += 1
+                    if patience_counter >= early_stopping_patience:
+                        if verbose:
+                            print(f"Early stopping triggered after {epoch + 1} epochs (patience: {early_stopping_patience})")
+                        # Restore best model
+                        if best_model_state is not None:
+                            if isinstance(model, torch.nn.DataParallel):
+                                model.module.load_state_dict(best_model_state)
+                            else:
+                                model.load_state_dict(best_model_state)
+                        break
+        else:
+            if verbose:
+                print(f"Epoch {epoch + 1}, Training Loss: {avg_loss}")
 
         # Log to W&B
         if wandb_config is not None and wandb_config.get("enabled", False):
-            wandb.log({"train_loss": avg_loss, "epoch": epoch + 1})
+            log_dict = {"train_loss": avg_loss, "epoch": epoch + 1}
+            if val_loss is not None:
+                log_dict["val_loss"] = val_loss
+            wandb.log(log_dict)
 
         if (
             model_save_path is not None
@@ -653,6 +737,18 @@ def run_evaluation_and_log(model_path: str, eval_config: dict, wandb_config: dic
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate clustering")
     parser.add_argument("--input", type=str, help="Input sequence file")
+    parser.add_argument(
+        "--val_input",
+        type=str,
+        default=None,
+        help="Validation sequence file (left,right per line). If provided, validation loss will be computed each epoch.",
+    )
+    parser.add_argument(
+        "--early_stopping_patience",
+        type=int,
+        default=0,
+        help="Early stopping patience (number of epochs without improvement). 0 = disabled.",
+    )
     parser.add_argument("--k", type=int, default=2, help="k value")
     parser.add_argument("--dim", type=int, default=256, help="dimension value")
     parser.add_argument(
@@ -768,6 +864,24 @@ if __name__ == "__main__":
         num_workers=args.workers_num,
     )
 
+    # Create validation dataset and loader if validation file is provided
+    validation_loader = None
+    if args.val_input is not None:
+        validation_dataset = PairDataset(
+            file_path=args.val_input,
+            transform_func=model.read2kmer_profile,
+            neg_sample_per_pos=args.neg_sample_per_pos,
+            max_read_num=0,  # Use all validation data
+            seed=args.seed,
+        )
+        validation_loader = DataLoader(
+            validation_dataset,
+            batch_size=args.batch_size if args.batch_size else len(validation_dataset),
+            shuffle=False,  # Don't shuffle validation data
+            num_workers=args.workers_num,
+        )
+        print(f"Validation dataset loaded: {len(validation_dataset)} samples")
+
     # Prepare W&B config
     wandb_config = None
     if args.wandb_project is not None and args.wandb_mode != "disabled":
@@ -807,9 +921,11 @@ if __name__ == "__main__":
         args.lr,
         args.epoch,
         training_loader,
-        args.loss_name,
-        args.output,
-        args.checkpoint,
+        validation_loader=validation_loader,
+        loss_name=args.loss_name,
+        model_save_path=args.output,
+        checkpoint=args.checkpoint,
         verbose=True,
         wandb_config=wandb_config,
+        early_stopping_patience=args.early_stopping_patience,
     )

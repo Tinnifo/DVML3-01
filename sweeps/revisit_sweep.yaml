@@ -1,6 +1,6 @@
 program: src/REVISIT.py
 method: grid  # Options: grid, random, bayes (random recommended for large search spaces)
-run_cap: 5  # Maximum number of runs for this sweep (optional, remove for unlimited)
+run_cap: 1  # Maximum number of runs for this sweep (optional, remove for unlimited)
 metric:
   name: eval/f1_at_0.5
   goal: maximize
@@ -10,28 +10,28 @@ parameters:
     value: train_2m.csv  # Update with your actual training file path
   
   k:
-    values: [2, 3, 4]
+    values: [4]
   
   dim:
     values: [256]
   
   lr:
-    values: [0.00001, 0.0001, 0.001, 0.01]  
+    values: [0.0001]  
   
   epoch:
-    values: [10, 20, 30, 40, 50]
+    values: [10]
   
   batch_size:
     values: [32, 64, 128]  # 0 means full dataset
   
   neg_sample_per_pos:
-    values: [100, 500, 1000]
+    values: [100]
   
   loss_name:
     values: ["bern"]
   
   max_read_num:
-    values: [100, 200, 300, 400, 500]  # 0 means all
+    values: [100]  # 0 means all
   
   seed:
     value: 26042024
@@ -58,8 +58,8 @@ parameters:
     value: .  # Path to evaluation data directory (contains reference/, marine/, plant/ subdirectories)
   
   eval_species:
-    value: reference  # Comma-separated list of species to evaluate (will auto-detect if not specified)
+    value: reference, marine, plant  # Comma-separated list of species to evaluate (will auto-detect if not specified)
   
   eval_sample:
-    value: 5  # Comma-separated list of sample IDs for evaluation
+    value: 5, 6  # Comma-separated list of sample IDs for evaluation
 
