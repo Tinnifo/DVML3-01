@@ -1,0 +1,38 @@
+program: evaluate_models.py
+method: grid  # Options: grid, random, bayes
+run_cap: null  # Maximum number of runs (null for unlimited)
+metric:
+  name: eval/f1_at_0.5  # Primary metric for sweep optimization
+  goal: maximize
+
+parameters:
+  model_path:
+    value: models/our_model.pt  # Path to model file to evaluate
+  
+  model_type:
+    value: our  # Options: our, revisit
+  
+  eval_data_dir:
+    value: .  # Path to evaluation data directory (contains reference/, marine/, plant/ subdirectories)
+  
+  eval_species:
+    value: reference, marine, plant  # Comma-separated list of species to evaluate
+  
+  eval_sample:
+    value: 5, 6  # Comma-separated list of sample IDs for evaluation
+  
+  k:
+    values: [4, 5, 6]  # k-mer size to test
+  
+  metric:
+    values: ["l2", "dot", "l1"]  # Similarity metric to test
+  
+  wandb_project:
+    value: model-evaluation  # W&B project name for evaluation runs
+  
+  wandb_entity:
+    value: null  # W&B entity (null uses default logged-in entity)
+  
+  wandb_mode:
+    value: online
+

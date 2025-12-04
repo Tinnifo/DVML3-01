@@ -60,57 +60,108 @@ Two DNA sequence embedding models using k-mer representations:
    wandb login
    ```
 
-6. **Run sweeps**:
-
-   **For OUR model:**
-   ```bash
-   python sweeps/run_our_sweep.py
-   ```
-
-   **For REVISIT model:**
-   ```bash
-   python sweeps/run_revisit_sweep.py
-   ```
+6. **Configure W&B entity** (if using team workspace):
+   - Edit `WANDB_ENTITY` in `sweeps/run_our_sweep.py` and `sweeps/run_revisit_sweep.py`
+   - Set to your W&B entity/team name (e.g., `"tinnifo-aalborg-universitet"`)
 
 **Note:** 
 - Make sure your virtual environment is activated before running commands
-- The YAML files use relative paths (`train_2m.csv`, `.` for eval_data_dir) which work correctly with this setup
+- The YAML files use relative paths (`train_2m.csv`, `val_48k.csv`) which work correctly with this setup
 - All data files, models, and outputs will be created in the project directory
+- See [POST_HOC_OPTIMIZATION.md](POST_HOC_OPTIMIZATION.md) for the complete workflow
 
-## Running Hyperparameter Sweeps
+## Workflow: Post-Hoc Optimization
 
-Sweeps automatically run evaluation after each training run and log all metrics to W&B.
+This project uses a **post-hoc optimization workflow** where training and evaluation are separated:
+
+1. **Train models** with hyperparameter sweeps
+2. **Evaluate all models** separately
+3. **Analyze results** in W&B to find best hyperparameters
+4. **Refine** and repeat
+
+### Step 1: Training Sweeps
+
+Run hyperparameter sweeps to train multiple models:
+
+**For OUR model:**
+```bash
+python sweeps/run_our_sweep.py --count 50  # Train 50 models
+```
+
+**For REVISIT model:**
+```bash
+python sweeps/run_revisit_sweep.py --count 50
+```
 
 **What happens:**
 - Each run trains with different hyperparameters
-- Evaluation runs automatically after training
-- All metrics logged to W&B (e.g., `eval/f1_at_0.5`, `eval/reference_sample5/f1_at_0.5`)
-- Sweep optimizes based on `eval/f1_at_0.5` (aggregated across all species/samples)
+- Models are saved to `models/` directory
+- Training hyperparameters logged to W&B config
+- Model paths logged to W&B summary
+- Sweep optimizes based on `val_loss` (to prevent overfitting)
+- **Evaluation is disabled during training** (done separately)
 
 **Configuring sweeps:**
 - Edit `sweeps/our_sweep.yaml` to configure the OUR model sweep parameters
 - Edit `sweeps/revisit_sweep.yaml` to configure the REVISIT model sweep parameters
-- You can change hyperparameters, evaluation settings, data paths, and W&B project settings in these YAML files
+- Update `WANDB_ENTITY` in `sweeps/run_our_sweep.py` and `sweeps/run_revisit_sweep.py` to your W&B entity/team
+
+### Step 2: Evaluate All Models
+
+After training, evaluate all models:
+
+```bash
+python evaluate_all_models.py \
+    --model_dir models/ \
+    --model_type our \
+    --eval_data_dir . \
+    --wandb_project dna-embedding-our \
+    --wandb_entity your-entity
+```
+
+**What happens:**
+- Finds all `.pt` model files in the directory
+- Evaluates each model on evaluation datasets
+- Links evaluation results to original training runs in W&B
+- Logs evaluation metrics (`eval/f1_at_0.5`, `eval/recall_at_0.5`, etc.) to W&B
+
+### Step 3: Analyze in W&B
+
+1. Go to your W&B project: `https://wandb.ai/<entity>/<project>`
+2. Use **Parallel Coordinates** or **Hyperparameter Importance** to see which training hyperparameters led to best `eval/f1_at_0.5`
+3. Identify promising hyperparameter ranges
+
+### Step 4: Refine and Repeat
+
+Update your sweep configuration based on findings and run another focused sweep.
+
+**For detailed workflow instructions, see [POST_HOC_OPTIMIZATION.md](POST_HOC_OPTIMIZATION.md)**
 
 ## Project Structure
 
 ```
 DVML3-01/
 ├── src/
-│   ├── OUR.py              # OUR model
-│   └── REVISIT.py          # REVISIT model
+│   ├── OUR.py              # OUR model training
+│   └── REVISIT.py          # REVISIT model training
 ├── sweeps/
 │   ├── our_sweep.yaml      # OUR sweep configuration
-│   ├── revisit_sweep.yaml # REVISIT sweep configuration
+│   ├── revisit_sweep.yaml  # REVISIT sweep configuration
+│   ├── evaluation_sweep.yaml  # Evaluation parameter sweep (optional)
 │   ├── run_our_sweep.py    # OUR sweep runner
 │   └── run_revisit_sweep.py # REVISIT sweep runner
 ├── evaluation/
-│   └── utils.py            # Evaluation utilities (required)
+│   └── utils.py            # Evaluation utilities
+├── evaluate_models.py      # Single model evaluation script
+├── evaluate_all_models.py  # Batch evaluation script (main workflow)
 ├── train_2m.csv            # Training data
+├── val_48k.csv             # Validation data
 ├── reference/              # Evaluation data
 ├── marine/                 # Evaluation data
 ├── plant/                   # Evaluation data
 ├── models/                  # Model outputs (created automatically)
+├── POST_HOC_OPTIMIZATION.md # Detailed workflow guide
+├── FILE_USAGE.md           # File usage documentation
 ├── requirements.txt        # Python dependencies
 └── README.md
 ```
@@ -124,18 +175,55 @@ ATCGATCG...,GCTAGCTA...
 ...
 ```
 
+## Evaluation
+
+### Single Model Evaluation
+
+Evaluate a single model:
+```bash
+python evaluate_models.py \
+    --model_path models/our_model.pt \
+    --model_type our \
+    --eval_data_dir .
+```
+
+### Batch Evaluation (Recommended)
+
+Evaluate all models and link to training runs:
+```bash
+python evaluate_all_models.py \
+    --model_dir models/ \
+    --model_type our \
+    --eval_data_dir . \
+    --wandb_project dna-embedding-our \
+    --wandb_entity your-entity
+```
+
+**Note:** Evaluation runs on CPU automatically (no GPU needed).
+
 ## Troubleshooting
 
-1. **CUDA out of memory**: Reduce batch size or use `--device cpu` in YAML config
+1. **CUDA out of memory**: Reduce batch size in sweep YAML config
 2. **W&B authentication error**: Run `wandb login` in your terminal
-3. **File not found**: Check data paths in YAML configuration files and ensure data files exist in the project directory
-4. **Evaluation not running**: Ensure `eval_data_dir` is set in YAML and evaluation data directories exist
-5. **Device errors**: Code automatically falls back to CPU if CUDA unavailable
-6. **Import errors**: Make sure you're in the project root directory and your virtual environment is activated
-7. **Python path issues**: If you encounter module import errors, ensure you're running commands from the project root directory
+3. **W&B entity/permission error**: Update `WANDB_ENTITY` in sweep runner scripts
+4. **File not found**: Check data paths in YAML configuration files and ensure data files exist
+5. **Evaluation not linking to training runs**: Ensure `--wandb_project` matches your training project
+6. **Device errors**: Code automatically falls back to CPU if CUDA unavailable
+7. **Import errors**: Make sure you're in the project root directory and your virtual environment is activated
+8. **Model not found**: Check that models are saved in the `models/` directory after training
 
-## Monitoring
+## Monitoring and Analysis
 
 View experiments in Weights & Biases:
-- https://wandb.ai/<your-entity>/dna-embedding-our
-- https://wandb.ai/<your-entity>/dna-embedding-revisit
+- Training runs: https://wandb.ai/<your-entity>/dna-embedding-our
+- Evaluation runs: Tagged with `post_hoc_evaluation` in the same project
+
+**Key W&B features for analysis:**
+- **Parallel Coordinates**: See which hyperparameters lead to best `eval/f1_at_0.5`
+- **Hyperparameter Importance**: Identify which training parameters matter most
+- **Compare Runs**: Compare training configs side-by-side with evaluation results
+
+## Additional Documentation
+
+- **[POST_HOC_OPTIMIZATION.md](POST_HOC_OPTIMIZATION.md)**: Detailed workflow guide for post-hoc optimization
+- **[FILE_USAGE.md](FILE_USAGE.md)**: Documentation of which files are used in which workflows

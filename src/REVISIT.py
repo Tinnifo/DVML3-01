@@ -447,6 +447,24 @@ def run(
         if verbose:
             print(f"Model is saving.")
             print(f"\t- Target path: {model_save_path}")
+        
+        # Log model path to W&B for linking with evaluation
+        if wandb_config is not None and wandb_config.get("enabled", False):
+            try:
+                import wandb
+                if wandb.run is not None:
+                    wandb.run.summary["model_path"] = model_save_path
+                    wandb.run.summary["model_saved"] = True
+                    # Also log as artifact for easy access
+                    try:
+                        artifact = wandb.Artifact(f"model-{wandb.run.id}", type="model")
+                        artifact.add_file(model_save_path)
+                        wandb.log_artifact(artifact)
+                    except Exception:
+                        # If artifact logging fails, that's okay - we still have the path in summary
+                        pass
+            except ImportError:
+                pass
 
     # Run evaluation if enabled and model is saved
     if (
@@ -905,15 +923,17 @@ if __name__ == "__main__":
                 "device": args.device,
                 "workers_num": args.workers_num,
             },
-            "evaluation": {
-                "enabled": args.eval_data_dir is not None,
+        }
+        # Only include evaluation config if evaluation is enabled
+        if args.eval_data_dir is not None:
+            wandb_config["evaluation"] = {
+                "enabled": True,
                 "data_dir": args.eval_data_dir,
                 "species": args.eval_species,
                 "sample": args.eval_sample,
                 "k": args.k,
                 "metric": "l2",
-            },
-        }
+            }
 
     # Run the model
     run(

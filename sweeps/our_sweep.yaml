@@ -2,8 +2,11 @@ program: src/OUR.py
 method: grid  # Options: grid, random, bayes (random recommended for large search spaces)
 run_cap: 1  # Maximum number of runs for this sweep (optional, remove for unlimited)
 metric:
-  name: eval/f1_at_0.5
-  goal: maximize
+  name: val_loss  # Use validation loss to guide sweep (minimize to avoid overfitting)
+  goal: minimize
+  # Alternative: use train_loss if no validation set is provided
+  # name: train_loss
+  # goal: minimize
 
 parameters:
   input:
@@ -54,12 +57,10 @@ parameters:
   wandb_mode:
     value: online
   
-  eval_data_dir:
-    value: .  # Path to evaluation data directory (contains reference/, marine/, plant/ subdirectories)
+  val_input:
+    value: val_48k.csv  # Validation file for computing validation loss (used for early stopping and sweep optimization)
   
-  eval_species:
-    value: reference, marine, plant  # Comma-separated list of species to evaluate (will auto-detect if not specified)
-  
-  eval_sample:
-    value: 5, 6  # Comma-separated list of sample IDs for evaluation
+  # Evaluation disabled during sweep - use separate evaluation script
+  # eval_data_dir:
+  #   value: null
 
