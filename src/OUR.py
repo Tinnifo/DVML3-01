@@ -30,6 +30,7 @@ def reverse_complement(seq: str) -> str:
     return seq.translate(comp_map)[::-1]
 
 
+
 def split_read(seq: str, k: int, L_min_useful: int, W_target: int):
     """
     Length-aware splitting:
@@ -73,6 +74,8 @@ def split_read(seq: str, k: int, L_min_useful: int, W_target: int):
     return views
 
 
+
+
 def make_views_for_read(
     seq: str,
     k: int,
@@ -104,6 +107,7 @@ def make_views_for_read(
                 views.append(rc)
 
     return views[:max_views_per_read]
+
 
 
 class SupConPairDataset(Dataset):

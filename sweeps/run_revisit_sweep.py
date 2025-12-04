@@ -16,6 +16,12 @@ import yaml
 import os
 import sys
 
+# ============================================================================
+# CONFIGURATION: Set your W&B entity here
+# ============================================================================
+WANDB_ENTITY = "tinnifo-aalborg-universitet"
+# ============================================================================
+
 
 def load_sweep_config(config_path: str) -> dict:
     """Load sweep configuration from YAML file."""
@@ -120,7 +126,7 @@ def main():
     sweep_id = initialize_sweep(
         args.sweep_config,
         project=args.project or "dna-embedding-revisit",
-        entity=args.entity,
+        entity=args.entity or WANDB_ENTITY,
     )
 
     # Run agent if not init-only
@@ -129,12 +135,12 @@ def main():
             sweep_id,
             count=args.count,
             project=args.project or "dna-embedding-revisit",
-            entity=args.entity,
+            entity=args.entity or WANDB_ENTITY,
         )
     else:
         print("\nSweep initialized. Run the agent separately with:")
         print(
-            f"  wandb agent {args.entity or ''}/{args.project or 'dna-embedding-revisit'}/{sweep_id}"
+            f"  wandb agent {args.entity or WANDB_ENTITY}/{args.project or 'dna-embedding-revisit'}/{sweep_id}"
         )
 
 

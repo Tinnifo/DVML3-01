@@ -73,7 +73,7 @@ def KMedoid(
     min_bin_size=100,
     max_iter=300,
     metric="dot",
-    scalable=False,
+    scalable=True,
 ):
     # rank nodes by the number of neighbors
     features = features.astype(np.float32)

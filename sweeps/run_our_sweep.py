@@ -20,7 +20,7 @@ import sys
 # ============================================================================
 # CONFIGURATION: Set your W&B entity here
 # ============================================================================
-WANDB_ENTITY = "tinnifo"
+WANDB_ENTITY = "tinnifo-aalborg-universitet"
 # ============================================================================
 
 
@@ -58,7 +58,7 @@ def initialize_sweep(
     # Set entity in environment variable as wandb might use it
     os.environ["WANDB_ENTITY"] = entity
     if project:
-        os.environ["WANDB_PROJECT"] = project
+        oshttps://github.com/Tinnifo/DVML3-01/tree/master/sweeps.environ["WANDB_PROJECT"] = project
 
     try:
         # Try with entity parameter
