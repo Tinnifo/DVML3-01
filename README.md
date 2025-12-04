@@ -135,8 +135,6 @@ python evaluate_all_models.py \
 
 Update your sweep configuration based on findings and run another focused sweep.
 
-**For detailed workflow instructions, see [POST_HOC_OPTIMIZATION.md](POST_HOC_OPTIMIZATION.md)**
-
 ## Project Structure
 
 ```
@@ -222,8 +220,3 @@ View experiments in Weights & Biases:
 - **Parallel Coordinates**: See which hyperparameters lead to best `eval/f1_at_0.5`
 - **Hyperparameter Importance**: Identify which training parameters matter most
 - **Compare Runs**: Compare training configs side-by-side with evaluation results
-
-## Additional Documentation
-
-- **[POST_HOC_OPTIMIZATION.md](POST_HOC_OPTIMIZATION.md)**: Detailed workflow guide for post-hoc optimization
-- **[FILE_USAGE.md](FILE_USAGE.md)**: Documentation of which files are used in which workflows
