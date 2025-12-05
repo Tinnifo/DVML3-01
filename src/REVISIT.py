@@ -66,8 +66,36 @@ class PairDataset(Dataset):
                     else:
                         chosen_line_idx += 1
 
-                # Remove the newline character and commas
-                left_read, right_read = line.strip().split(",")
+                # Handle both comma-separated and tab-separated formats
+                stripped_line = line.strip()
+                if not stripped_line:  # Skip empty lines
+                    continue
+                
+                # Try comma first (for training/validation CSV files)
+                if "," in stripped_line:
+                    parts = stripped_line.split(",")
+                # Fall back to tab (for evaluation TSV files)
+                elif "\t" in stripped_line:
+                    parts = stripped_line.split("\t")
+                else:
+                    # Single sequence line (no separator) - skip
+                    if verbose:
+                        print(f"Warning: Line {current_line_idx + 1} has no separator, skipping")
+                    continue
+                
+                if len(parts) < 2:
+                    if verbose:
+                        print(f"Warning: Line {current_line_idx + 1} has less than 2 parts, skipping")
+                    continue
+                
+                left_read = parts[0].strip()
+                right_read = parts[1].strip()
+                
+                if not left_read or not right_read:
+                    if verbose:
+                        print(f"Warning: Line {current_line_idx + 1} has empty read(s), skipping")
+                    continue
+                
                 left_kmer_profiles.append(self.__transform_func(left_read))
                 right_kmer_profiles.append(self.__transform_func(right_read))
 

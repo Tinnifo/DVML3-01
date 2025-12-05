@@ -1,5 +1,9 @@
 # Core dependencies for OUR and REVISIT models
-torch>=2.0.0
+# torch>=2.0.0  # Commented out - install PyTorch separately to avoid overwriting existing installation
+# Note: Install PyTorch manually based on your GPU/CUDA setup:
+#   CPU: pip install torch torchvision torchaudio
+#   CUDA: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+#   Or use your existing PyTorch installation
 numpy>=1.24.0
 
 # Evaluation and metrics
