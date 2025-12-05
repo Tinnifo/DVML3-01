@@ -1,6 +1,6 @@
 program: src/REVISIT.py
-method: grid  # Options: grid, random, bayes (random recommended for large search spaces)
-run_cap: 1  # Maximum number of runs for this sweep (optional, remove for unlimited)
+method: random  # Options: grid, random, bayes (random recommended for large search spaces)
+run_cap: null  # Maximum number of runs (null for unlimited, set to number to limit)
 metric:
   name: val_loss  # Use validation loss to guide sweep (minimize to avoid overfitting)
   goal: minimize
@@ -13,28 +13,28 @@ parameters:
     value: train_2m.csv  # Update with your actual training file path
   
   k:
-    values: [4]
+    values: [4]  # k-mer sizes to explore
   
   dim:
-    values: [256]
+    values: [128, 256, 512]  # Embedding dimensions to explore
   
   lr:
-    values: [0.0001]  
+    values: [0.00005, 0.0001, 0.0002, 0.0005]  # Learning rates to explore
   
   epoch:
-    values: [10]
+    values: [5, 10, 15, 20]  # Number of epochs to explore
   
   batch_size:
-    values: [32, 64, 128]  # 0 means full dataset
+    values: [16, 32, 64, 128]  # Batch sizes to explore (0 means full dataset)
   
   neg_sample_per_pos:
-    values: [100]
+    values: [50, 100, 200]  # Negative samples per positive to explore
   
   loss_name:
-    values: ["bern"]
+    values: ["bern"]  # Loss function (can add more if supported)
   
   max_read_num:
-    values: [100]  # 0 means all
+    values: [50, 100, 200]  # Maximum reads to use (0 means all)
   
   seed:
     value: 26042024
